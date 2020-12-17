@@ -6,11 +6,12 @@ from file_types import IdentityDocument, TaxNotice, AccountStatements
 def parse_args():
     parser = argparse.ArgumentParser("OCR")
 
-    parser.add_argument("-path", type=str, default=None, help="path to document")
+    parser.add_argument("-path", type=str, default=None, help="path to document", required=True)
     parser.add_argument("-path-file", type=str, default=None, help="path to file that lists documents")
 
     parser.add_argument("-type", type=int, default=0,
-     help="type of the document [0 = relevé de compte, 1 = avis d'imposition, 2 = piece d'identite]")
+                        help="type of the document [0 = relevé de compte, 1 = avis d'imposition, 2 = piece d'identite]",
+                        required=True)
     parser.add_argument("-lang", type=str, default='fra', help="document language")
 
     return parser.parse_args()
