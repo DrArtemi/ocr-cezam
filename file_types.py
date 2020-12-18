@@ -6,31 +6,38 @@ import cv2 as cv
 
 from PIL import Image
 
-from utils import remove_dot_background, pdf_to_tiff, save_cv_image
+from utils import remove_dot_background, pdf_to_tiff, save_cv_image, split_pdf_pages, write_file_from_text
 
 
 class TesseractDoc:
 
     def __init__(self, file_path, language):
         self.file_path = file_path
+        self.folder_path = '.'.join(self.file_path.split('.')[:-1])
         self.language = language
 
-        self.processed_file_path = file_path
+        self.processed_file_path = []
 
-        self.file_text = None
-        self.file_text_data = None
-        self.file_text_bb = None
+        self.file_text = []
+        self.file_text_data = []
+        self.file_text_bb = []
     
-    
-    def extract_text(self, bb=False, data=False):
+    def extract_text(self, bb=False, data=False, save_file=False):
         if self.processed_file_path is None:
             print('Error: {}: Processed file not found.'.format(self.processed_file_path))
         
-        self.file_text = pytesseract.image_to_string(Image.open(self.processed_file_path), lang=self.language)
-        if bb:
-            self.file_text_bb = pytesseract.image_to_boxes(Image.open(self.processed_file_path), lang=self.language)
-        if data:
-            self.file_text_data = pytesseract.image_to_data(Image.open(self.processed_file_path), lang=self.language)
+        for i, processed_fp in enumerate(self.processed_file_path):
+            self.file_text.append(pytesseract.image_to_string(Image.open(processed_fp), lang=self.language))
+            if save_file:
+                write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'raw_text_{}.txt'.format(i)))
+            if bb:
+                self.file_text_bb.append(pytesseract.image_to_boxes(Image.open(processed_fp), lang=self.language))
+                if save_file:
+                    write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'text_bb_{}.txt'.format(i)))
+            if data:
+                self.file_text_data.append(pytesseract.image_to_data(Image.open(processed_fp), lang=self.language))
+                if save_file:
+                    write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'text_data_{}.txt'.format(i)))
 
     def parse_fields(self):
         raise NotImplemented    
@@ -57,20 +64,27 @@ class AccountStatements(TesseractDoc):
         # Statement rows (date, libellé, montant)
         self.statement_row = []
 
+        # Image list of pdf
+        self.images = []
+
         super().__init__(file_path, language)
     
     def processing(self):
-        # Convert pdf to tiff to be able to process it
-        tiff_path = pdf_to_tiff(self.file_path)
+        # TODO : Split le pdf en plusieurs pages
+        paths = split_pdf_pages(self.file_path, self.folder_path)
 
-        # Convert tiff to cv2 img
-        img = cv.imread(tiff_path, 0)
+        for path in paths:
+            # Convert pdf to tiff to be able to process it
+            tiff_path = pdf_to_tiff(path)
 
-        # Remove noise background
-        img = remove_dot_background(img, kernel=(4, 4))
+            # Convert tiff to cv2 img
+            img = cv.imread(tiff_path, 0)
 
-        # Save image to jpg and remove tiff
-        self.processed_file_path = save_cv_image(img, tiff_path, 'jpg', del_original=True)
+            # Remove noise background
+            img = remove_dot_background(img, kernel=(4, 4))
+
+            # Save image to jpg and remove tiff
+            self.processed_file_path.append(save_cv_image(img, tiff_path, 'jpg', del_original=True))
 
 
 

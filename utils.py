@@ -1,4 +1,5 @@
 import os
+import PyPDF2
 import subprocess
 
 import cv2 as cv
@@ -41,6 +42,7 @@ def pdf_to_tiff(file_path):
     
     return file_path_tiff
 
+
 def save_cv_image(img, original_path, extension, del_original=False):
         new_path = original_path.split('.')[:-1]
         new_path.append(extension)
@@ -50,4 +52,37 @@ def save_cv_image(img, original_path, extension, del_original=False):
             os.remove(new_path)
 
         cv.imwrite(new_path, img)
+
+        if del_original:
+            os.remove(original_path)
         return new_path
+
+
+def split_pdf_pages(input_pdf_path, target_dir, fname_fmt=u"{num_page:04d}.pdf"):
+    paths = []
+    
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+
+    with open(input_pdf_path, "rb") as input_stream:
+        input_pdf = PyPDF2.PdfFileReader(input_stream)
+
+        if input_pdf.flattenedPages is None:
+            # flatten the file using getNumPages()
+            input_pdf.getNumPages()  # or call input_pdf._flatten()
+
+        for num_page, page in enumerate(input_pdf.flattenedPages):
+            output = PyPDF2.PdfFileWriter()
+            output.addPage(page)
+
+            file_name = os.path.join(target_dir, fname_fmt.format(num_page=num_page))
+            paths.append(file_name)
+            with open(file_name, "wb") as output_stream:
+                output.write(output_stream)
+    
+    return paths
+
+
+def write_file_from_text(text, filename):
+    with open(filename, "w+") as file:
+        file.write(text)
