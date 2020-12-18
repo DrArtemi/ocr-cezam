@@ -55,7 +55,7 @@ if __name__ == '__main__':
     # Extract image information
     print('PDF path : {}'.format(image.file_path))
     print('Processed path : {}'.format(image.processed_file_path))
-    image.extract_text()
-    print('TEXT :\n {}'.format(image.file_text))
+    image.extract_text(save_file=True)
+    # print('TEXT :\n {}'.format(image.file_text))
     # print('TEXT :\n {}'.format(image.file_text_bb))
     # print('TEXT :\n {}'.format(image.file_text_data))
