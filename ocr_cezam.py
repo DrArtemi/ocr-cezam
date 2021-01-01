@@ -1,4 +1,5 @@
 import argparse
+import pytesseract
 
 from file_types import IdentityDocument, TaxNotice, AccountStatements
 
@@ -43,6 +44,10 @@ if __name__ == '__main__':
     # Get arguments
     args = parse_args()
 
+    print('*******************************************')
+    print('TESSERACT VERSION : {}'.format(pytesseract.get_tesseract_version()))
+    print('*******************************************')
+
     if args.path is None and args.path_file is None:
         print('Error: You must give a path to a document. Use python ocr_cezam.py -h for more information.')
 
@@ -56,6 +61,21 @@ if __name__ == '__main__':
     print('PDF path : {}'.format(image.file_path))
     print('Processed path : {}'.format(image.processed_file_path))
     image.extract_text(save_file=True)
-    # print('TEXT :\n {}'.format(image.file_text))
-    # print('TEXT :\n {}'.format(image.file_text_bb))
+    image.parse_fields()
+    print('Bank info :')
+    print('Name : {}'.format(image.bank_name))
+    print('Address : {}'.format(image.agency_address))
+    print('Phone : {}'.format(image.agency_phone))
+    print('Email : {}'.format(image.agency_email))
+
+    print('Client info :')
+    print('First name : {}'.format(image.first_name))
+    print('Last name : {}'.format(image.last_name))
+    print('Address : {}'.format(image.address))
+    print('Month : {}'.format(image.statement_month))
+    print('Year : {}'.format(image.statement_year))
+
+    print('Relevé :')
+    print(image.statement_row)
+    # print('TEXT :\n {}'.format(image.file_text_data['text']))
     # print('TEXT :\n {}'.format(image.file_text_data))
