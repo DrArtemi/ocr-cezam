@@ -1,30 +1,13 @@
 import os
 import re
+import json
 import PyPDF2
 import datetime
 import subprocess
 
 import cv2 as cv
 
-BANK_NAMES = {
-    'Banque Populaire': ['banque populaire', 'banquepopulaire']
-}
-
-BANK_INFOS = {
-    'Banque Populaire': {
-        'info_bank' : [(0.0, 0.2), (0.0, 0.3)],
-        'info_client': [(0.5, 1.0), (0.0, 0.3)],
-        'info_date': [(0.5, 1.0), (0.0, 0.2)],
-        'info_table': [(0.0, 1.0), (0.0, 1.0)]
-    }
-}
-
-ADDRESS = ['rue', 'avenue', 'ave', 'route']
-PHONE = ['tel', 'tel:', 'tél', 'tél:']
 EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
-DATE_PATTERN = {
-    'Banque Populaire': {'date_format': '%d/%m/%Y'}
-}
 
 def remove_dot_background(img, kernel=(5, 5)):
     # Global thresholding and invert color
@@ -137,12 +120,18 @@ def save_bb_image(img_path, bb):
     cv.imwrite(bb_img_path, img)
 
 
-def get_bank_name(text):
+def get_json_from_file(filename):
+    with open(filename) as json_file:
+        return json.load(json_file)
+
+
+def get_bank_id(text):
+    data = get_json_from_file('bank_configs/banks.json')
     for line in text:
-        for b_name, b_list in BANK_NAMES.items():
+        for b_id, b_list in data.items():
             for b_pat in b_list:
                 if b_pat in ' '.join(line).lower():
-                    return b_name
+                    return b_id
     return None
 
 
@@ -162,13 +151,13 @@ def get_words_in_zone(w_list, bb, zone):
     return words
 
 
-def get_addresses(text, bb, size, bank_type):
+def get_addresses(text, bb, size, bank_utils, dicts):
     bank_address = None
     client_address = None
-    bi_bank = BANK_INFOS[bank_type]['info_bank']
-    bi_client = BANK_INFOS[bank_type]['info_client']
+    bi_bank = bank_utils['bank_info']
+    bi_client = bank_utils['client_info']
     for i in range(len(text)):
-        for a_type in ADDRESS:
+        for a_type in dicts['address']:
             for j, w in enumerate(text[i]):
                 if a_type == w.lower():
                     if (bi_bank[0][0] * size[0]) < bb[i][j][0] < (bi_bank[0][1] * size[0]) and \
@@ -186,11 +175,11 @@ def get_addresses(text, bb, size, bank_type):
     return bank_address, client_address
 
 
-def get_agency_phone(text, bb, size, bank_type):
-    bi = BANK_INFOS[bank_type]['info_bank']
+def get_agency_phone(text, bb, size, bank_utils, dicts):
+    bi = bank_utils['bank_info']
     tel = None
     for i in range(len(text)):
-        for p_type in PHONE:
+        for p_type in dicts['phone']:
             for j, w in enumerate(text[i]):
                 if p_type == w.lower():
                     if (bi[0][0] * size[0]) < bb[i][j][0] < (bi[0][1] * size[0]) and \
@@ -200,8 +189,8 @@ def get_agency_phone(text, bb, size, bank_type):
     return tel
 
 
-def get_agency_email(text, bb, size, bank_type):
-    bi = BANK_INFOS[bank_type]['info_bank']
+def get_agency_email(text, bb, size, bank_utils):
+    bi = bank_utils['bank_info']
     email = None
     for i in range(len(text)):
         for j, w in enumerate(text[i]):
@@ -212,9 +201,9 @@ def get_agency_email(text, bb, size, bank_type):
     return email
 
 
-def get_date(text, bb, size, bank_type):
-    dp = DATE_PATTERN[bank_type]['date_format']
-    bi = BANK_INFOS[bank_type]['info_date']
+def get_date(text, bb, size, bank_utils):
+    dp = bank_utils['date_format']
+    bi = bank_utils['date_info']
     date = None
     for i in range(len(text)):
         for j, w in enumerate(text[i]):

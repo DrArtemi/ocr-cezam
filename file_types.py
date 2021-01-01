@@ -187,12 +187,16 @@ class AccountStatements(TesseractDoc):
             
             # Get information available on the first page
             if i == 0:
-                self.bank_name = get_bank_name(text)
+                # TODO : implémenter les trucs la
+                bank_id = get_bank_id(text)
+                self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
+                self.dicts = get_json_from_file('dict.json')
+                self.bank_name = self.bank_utils['name']
                 self.last_name, self.first_name = get_client_name(text)
-                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_name)
-                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_name)
-                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_name)
-                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_name)
+                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_utils, self.dicts)
+                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_utils, self.dicts)
+                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
+                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
             self.process_table(i, text, bb)
             print('Rows shape : {}'.format(self.statement_row.shape))
 
