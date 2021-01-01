@@ -1,12 +1,16 @@
 import pytesseract
 import errno
+import csv
 import os
 
 import cv2 as cv
+import numpy as np
+import pandas as pd
 
 from PIL import Image
+from pytesseract.pytesseract import Output
 
-from utils import remove_dot_background, pdf_to_tiff, save_cv_image, split_pdf_pages, write_file_from_text
+from utils import *
 
 
 class TesseractDoc:
@@ -18,29 +22,31 @@ class TesseractDoc:
 
         self.processed_file_path = []
 
-        self.file_text = []
         self.file_text_data = []
-        self.file_text_bb = []
+        self.images_size = []
     
-    def extract_text(self, bb=False, data=False, save_file=False):
+    def extract_text(self, save_file=False):
+        self.file_text_data = []
+        self.images_size = []
+
         if self.processed_file_path is None:
             print('Error: {}: Processed file not found.'.format(self.processed_file_path))
         
+        custom_config = r'--oem 3 --psm 4'
         for i, processed_fp in enumerate(self.processed_file_path):
-            self.file_text.append(pytesseract.image_to_string(Image.open(processed_fp), lang=self.language))
-            if save_file:
-                write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'raw_text_{}.txt'.format(i)))
-            if bb:
-                self.file_text_bb.append(pytesseract.image_to_boxes(Image.open(processed_fp), lang=self.language))
-                if save_file:
-                    write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'text_bb_{}.txt'.format(i)))
-            if data:
-                self.file_text_data.append(pytesseract.image_to_data(Image.open(processed_fp), lang=self.language))
-                if save_file:
-                    write_file_from_text(self.file_text[-1], os.path.join(self.folder_path, 'text_data_{}.txt'.format(i)))
+            img = Image.open(processed_fp)
+            self.images_size.append(img.size)
+            res = pytesseract.image_to_data(img,
+                                            output_type=Output.DICT,
+                                            config=custom_config,
+                                            lang=self.language)
+            self.file_text_data.append(res)
 
     def parse_fields(self):
-        raise NotImplemented    
+        raise NotImplemented
+
+    def process_text(self):
+        raise NotImplemented
 
 
 class AccountStatements(TesseractDoc):
@@ -62,7 +68,8 @@ class AccountStatements(TesseractDoc):
         self.statement_month = ''
 
         # Statement rows (date, libellé, montant)
-        self.statement_row = []
+        self.statement_row = None
+        self.columns = None
 
         # Image list of pdf
         self.images = []
@@ -70,7 +77,6 @@ class AccountStatements(TesseractDoc):
         super().__init__(file_path, language)
     
     def processing(self):
-        # TODO : Split le pdf en plusieurs pages
         paths = split_pdf_pages(self.file_path, self.folder_path)
 
         for path in paths:
@@ -81,14 +87,124 @@ class AccountStatements(TesseractDoc):
             img = cv.imread(tiff_path, 0)
 
             # Remove noise background
-            img = remove_dot_background(img, kernel=(4, 4))
+            img = remove_dot_background(img, kernel=(5, 5))
 
             # Save image to jpg and remove tiff
             self.processed_file_path.append(save_cv_image(img, tiff_path, 'jpg', del_original=True))
+    
+    def process_text(self, text_data):
+        word_list = []
+        conf_list = []
+        bb_list = []
+        parse_text = []
+        parse_conf = []
+        parse_bb = []
+        last_word = ''
+        for i, word in enumerate(text_data['text']):
+            if word != '':
+                word_list.append(word)
+                conf_list.append(text_data['conf'][i])
+                bb_list.append((text_data['left'][i],
+                                text_data['top'][i],
+                                text_data['width'][i],
+                                text_data['height'][i]))
+                last_word = word
+            if (last_word != '' and word == '') or (i == len(text_data['text']) - 1):
+                if len(word_list) > 0:
+                    parse_text.append(word_list)
+                    parse_conf.append(conf_list)
+                    parse_bb.append(bb_list)
+                word_list = []
+                conf_list = []
+                bb_list = []
+        return parse_text, parse_conf, parse_bb
+    
+    def process_table(self, idx, text, bb):
+        file = self.processed_file_path[idx]
+        img = cv.imread(file)
+        # Extraction des lignes du tableau
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        edges = cv.Canny(gray, 100, 150, apertureSize=3)
+        min_len = edges.shape[1] * 0.75  # Taille minimale d'une ligne
+        max_gap = 6  # Ecrat maximal pour considérer que c'est la même ligne
+        lines = cv.HoughLinesP(edges, rho=1, theta=(np.pi / 180), threshold=50,
+                               minLineLength=min_len, maxLineGap=max_gap)
+        
+        # Séparation des lignes verticales et horizontales
+        v_lines = []
+        h_lines = []
+        for i in range(len(lines)):
+            l = lines[i][0]
+            if is_line_vertical(l):
+                v_lines.append(l)
+            elif is_line_horizontal(l):
+                h_lines.append(l)
+        
+        # On filtre les doublons
+        v_lines = overlapping_lines_filter(v_lines, 0)
+        h_lines = overlapping_lines_filter(h_lines, 1)
 
+        # On récupère les extrémités du tableau (top, bottom, left, right)
+        if len(h_lines) < 2 or len(v_lines) < 2:
+            return False
+        table_shape = (h_lines[0][1], h_lines[-1][1], v_lines[0][0], v_lines[-1][0])
+        if self.columns is None:
+            self.columns = get_table_columns(text, bb, table_shape, v_lines)
+        if len(v_lines) - 1 != len(self.columns):
+            print('No valid table on this page :', len(v_lines), len(self.columns))
+            return False
+        data = []
+        for i in range(len(text)):
+            row = [''] * len(self.columns)
+            cnt = 0
+            for j in range(len(v_lines) - 1):
+                words = []
+                for h, w in enumerate(text[i]):
+                    if v_lines[j][0] < bb[i][h][0] < v_lines[j+1][0] and\
+                        table_shape[0] < bb[i][h][1] < table_shape[1]:
+                        words.append(w)
+                if len(words) > 0:
+                    row[j] = ' '.join(words)
+                    cnt += 1
+            if cnt > 0:
+                data.append(row)
+        
+        # print('Coucou')
+        if self.statement_row is None:
+            # print('Coucou 1')
+            self.statement_row = pd.DataFrame(data, columns=self.columns)
+        else:
+            # print('Coucou 2')
+            tmp_statement = pd.DataFrame(data, columns=self.columns)
+            # print(tmp_statement)
+            self.statement_row = self.statement_row.append(tmp_statement, ignore_index=True)
+        return True
 
+       
+    def parse_fields(self):
+        for i, text_data in enumerate(self.file_text_data):
+            text, conf, bb = self.process_text(text_data)
+            
+            # Get information available on the first page
+            if i == 0:
+                self.bank_name = get_bank_name(text)
+                self.last_name, self.first_name = get_client_name(text)
+                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_name)
+                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_name)
+                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_name)
+                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_name)
+            self.process_table(i, text, bb)
+            print('Rows shape : {}'.format(self.statement_row.shape))
 
-
+            
+            save_bb_image(self.processed_file_path[i], bb)
+            # for j in range(len(text)):
+                # print(text[j])
+                # print(conf)
+                # print(bb)
+                # print('-----------------------------------------------')
+            # return
+        
 
 class TaxNotice:
 

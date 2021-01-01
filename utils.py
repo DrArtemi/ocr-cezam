@@ -1,9 +1,30 @@
 import os
+import re
 import PyPDF2
+import datetime
 import subprocess
 
 import cv2 as cv
 
+BANK_NAMES = {
+    'Banque Populaire': ['banque populaire', 'banquepopulaire']
+}
+
+BANK_INFOS = {
+    'Banque Populaire': {
+        'info_bank' : [(0.0, 0.2), (0.0, 0.3)],
+        'info_client': [(0.5, 1.0), (0.0, 0.3)],
+        'info_date': [(0.5, 1.0), (0.0, 0.2)],
+        'info_table': [(0.0, 1.0), (0.0, 1.0)]
+    }
+}
+
+ADDRESS = ['rue', 'avenue', 'ave', 'route']
+PHONE = ['tel', 'tel:', 'tél', 'tél:']
+EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+DATE_PATTERN = {
+    'Banque Populaire': {'date_format': '%d/%m/%Y'}
+}
 
 def remove_dot_background(img, kernel=(5, 5)):
     # Global thresholding and invert color
@@ -32,7 +53,7 @@ def pdf_to_tiff(file_path):
         os.remove(file_path_tiff)
 
     subprocess.run(['convert',
-                    '-density', '600',
+                    '-density', '800',
                     file_path,
                     '-background', 'white',
                     '-alpha', 'background',
@@ -86,3 +107,182 @@ def split_pdf_pages(input_pdf_path, target_dir, fname_fmt=u"{num_page:04d}.pdf")
 def write_file_from_text(text, filename):
     with open(filename, "w+") as file:
         file.write(text)
+
+
+def save_bb_image_old(img_path, data, conf_thresh=50):
+    img = cv.imread(img_path)
+    for i, text in enumerate(data['text']):
+        if int(data['conf'][i]) > conf_thresh:
+            (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+            img = cv.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    bb_img_path = img_path.split('.')
+    bb_img_path[-2] += '_bb'
+    bb_img_path = '.'.join(bb_img_path)
+    if os.path.exists(bb_img_path):
+        os.remove(bb_img_path)
+    cv.imwrite(bb_img_path, img)
+
+
+def save_bb_image(img_path, bb):
+    img = cv.imread(img_path)
+    for row in bb:
+        for box in row:
+            (x, y, w, h) = (box[0], box[1], box[2], box[3])
+            img = cv.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    bb_img_path = img_path.split('.')
+    bb_img_path[-2] += '_bb'
+    bb_img_path = '.'.join(bb_img_path)
+    if os.path.exists(bb_img_path):
+        os.remove(bb_img_path)
+    cv.imwrite(bb_img_path, img)
+
+
+def get_bank_name(text):
+    for line in text:
+        for b_name, b_list in BANK_NAMES.items():
+            for b_pat in b_list:
+                if b_pat in ' '.join(line).lower():
+                    return b_name
+    return None
+
+
+def get_client_name(text):
+    for line in text:
+        for i, w in enumerate(line):
+            if 'mme' == w.lower():
+                return line[i + 1], line[i + 2]
+    return None, None
+
+
+def get_words_in_zone(w_list, bb, zone):
+    words = []
+    for i in range(len(w_list)):
+        if zone[0] < bb[i][0] < zone[1]:
+            words.append(w_list[i])
+    return words
+
+
+def get_addresses(text, bb, size, bank_type):
+    bank_address = None
+    client_address = None
+    bi_bank = BANK_INFOS[bank_type]['info_bank']
+    bi_client = BANK_INFOS[bank_type]['info_client']
+    for i in range(len(text)):
+        for a_type in ADDRESS:
+            for j, w in enumerate(text[i]):
+                if a_type == w.lower():
+                    if (bi_bank[0][0] * size[0]) < bb[i][j][0] < (bi_bank[0][1] * size[0]) and \
+                        (bi_bank[1][0] * size[1]) < bb[i][j][1] < (bi_bank[1][1] * size[1]):
+                        bank_address = ' '.join(
+                            get_words_in_zone(text[i], bb[i], (bi_bank[0][0] * size[0], bi_bank[0][1] * size[0])) +
+                            get_words_in_zone(text[i+1], bb[i+1], (bi_bank[0][0] * size[0], bi_bank[0][1] * size[0]))
+                        )
+                    elif (bi_client[0][0] * size[0]) < bb[i][j][0] < (bi_client[0][1] * size[0]) and \
+                        (bi_client[1][0] * size[1]) < bb[i][j][1] < (bi_client[1][1] * size[1]):
+                        client_address = ' '.join(
+                            get_words_in_zone(text[i], bb[i], (bi_client[0][0] * size[0], bi_client[0][1] * size[0])) +
+                            get_words_in_zone(text[i+1], bb[i+1], (bi_client[0][0] * size[0], bi_client[0][1] * size[0]))
+                        )
+    return bank_address, client_address
+
+
+def get_agency_phone(text, bb, size, bank_type):
+    bi = BANK_INFOS[bank_type]['info_bank']
+    tel = None
+    for i in range(len(text)):
+        for p_type in PHONE:
+            for j, w in enumerate(text[i]):
+                if p_type == w.lower():
+                    if (bi[0][0] * size[0]) < bb[i][j][0] < (bi[0][1] * size[0]) and \
+                        (bi[1][0] * size[1]) < bb[i][j][1] < (bi[1][1] * size[1]):
+                        tel = get_words_in_zone(text[i], bb[i], (bi[0][0] * size[0], bi[0][1] * size[0]))
+                        tel = ''.join(tel[1:]).replace(':', '')
+    return tel
+
+
+def get_agency_email(text, bb, size, bank_type):
+    bi = BANK_INFOS[bank_type]['info_bank']
+    email = None
+    for i in range(len(text)):
+        for j, w in enumerate(text[i]):
+            if re.search(EMAIL_RGX, w):
+                if (bi[0][0] * size[0]) < bb[i][j][0] < (bi[0][1] * size[0]) and \
+                    (bi[1][0] * size[1]) < bb[i][j][1] < (bi[1][1] * size[1]):
+                    email = w
+    return email
+
+
+def get_date(text, bb, size, bank_type):
+    dp = DATE_PATTERN[bank_type]['date_format']
+    bi = BANK_INFOS[bank_type]['info_date']
+    date = None
+    for i in range(len(text)):
+        for j, w in enumerate(text[i]):
+            try:
+                tmp_date = datetime.datetime.strptime(w, dp)
+                if (bi[0][0] * size[0]) < bb[i][j][0] < (bi[0][1] * size[0]) and \
+                    (bi[1][0] * size[1]) < bb[i][j][1] < (bi[1][1] * size[1]):
+                    date = tmp_date
+            except ValueError:
+                continue
+    
+    if date is not None:
+        return date.strftime('%d'), date.strftime('%B'), date.strftime('%Y')
+    return None, None, None
+
+
+def get_table_columns(text, bb, shape, v_lines):
+    line_idx = None
+    for i in range(len(text)):
+        for j, w in enumerate(text[i]):
+            if shape[2] < bb[i][j][0] < shape[3] and\
+                 shape[0] < bb[i][j][1] < shape[1]:
+                line_idx = i
+                break
+        if line_idx is not None:
+            break
+    if line_idx is None:
+        return None
+    columns = []
+    for i in range(len(v_lines) - 1):
+        col_title = [str(i)]
+        for j, w in enumerate(text[line_idx]):
+            if v_lines[i][0] < bb[line_idx][j][0] < v_lines[i+1][0]:
+                col_title.append(w)
+        columns.append(' '.join(col_title) if len(col_title) > 0 else 'Unknown')
+        
+    return columns
+
+
+def get_rows(text, bb, shape):
+    for i in range(len(text)):
+        for j, w in enumerate(text[i]):
+            if shape[2] < bb[i][j][0] < shape[3] and\
+                 shape[0] < bb[i][j][1] < shape[1]:
+                print(text[i])
+                break
+
+
+def is_line_vertical(line):
+    return line[0] == line[2]
+
+
+def is_line_horizontal(line):
+    return line[1] == line[3]
+
+
+def overlapping_lines_filter(lines, sort_idx):
+    filtered = []
+    
+    lines = sorted(lines, key=lambda lines: lines[sort_idx])
+    threshold = 10
+    
+    for i in range(len(lines)):
+        l = lines[i]
+        if i > 0:
+            l_prev = lines[i-1]
+            if l[sort_idx] - l_prev[sort_idx] > threshold:
+                filtered.append(l)
+        else:
+            filtered.append(l)
+    return filtered
