@@ -36,7 +36,7 @@ def pdf_to_tiff(file_path):
         os.remove(file_path_tiff)
 
     subprocess.run(['convert',
-                    '-density', '800',
+                    '-density', '1200',
                     file_path,
                     '-background', 'white',
                     '-alpha', 'background',

@@ -169,14 +169,10 @@ class AccountStatements(TesseractDoc):
             if cnt > 0:
                 data.append(row)
         
-        # print('Coucou')
         if self.statement_row is None:
-            # print('Coucou 1')
             self.statement_row = pd.DataFrame(data, columns=self.columns)
         else:
-            # print('Coucou 2')
             tmp_statement = pd.DataFrame(data, columns=self.columns)
-            # print(tmp_statement)
             self.statement_row = self.statement_row.append(tmp_statement, ignore_index=True)
         return True
 
@@ -187,7 +183,6 @@ class AccountStatements(TesseractDoc):
             
             # Get information available on the first page
             if i == 0:
-                # TODO : implémenter les trucs la
                 bank_id = get_bank_id(text)
                 self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
                 self.dicts = get_json_from_file('dict.json')
@@ -198,7 +193,9 @@ class AccountStatements(TesseractDoc):
                 self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
                 _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
             self.process_table(i, text, bb)
-            print('Rows shape : {}'.format(self.statement_row.shape))
+
+            if self.statement_row is not None:
+                print('Rows shape : {}'.format(self.statement_row.shape))
 
             
             save_bb_image(self.processed_file_path[i], bb)
