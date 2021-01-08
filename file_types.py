@@ -70,6 +70,8 @@ class AccountStatements(TesseractDoc):
         # Statement rows (date, libellé, montant)
         self.statement_row = None
         self.columns = None
+        self.v_lines = None
+        self.h_lines = None
 
         # Image list of pdf
         self.images = []
@@ -84,10 +86,13 @@ class AccountStatements(TesseractDoc):
             tiff_path = pdf_to_tiff(path)
 
             # Convert tiff to cv2 img
-            img = cv.imread(tiff_path, 0)
+            img = cv.imread(tiff_path)
 
             # Remove noise background
-            img = remove_dot_background(img, kernel=(5, 5))
+            img = remove_dot_background(img, kernel=(7, 7))
+
+            # Rotate img
+            img = deskew_img(img)
 
             # Save image to jpg and remove tiff
             self.processed_file_path.append(save_cv_image(img, tiff_path, 'jpg', del_original=True))
@@ -124,12 +129,14 @@ class AccountStatements(TesseractDoc):
         img = cv.imread(file)
         # Extraction des lignes du tableau
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        edges = cv.Canny(gray, 100, 150, apertureSize=3)
-        min_len = edges.shape[1] * 0.75  # Taille minimale d'une ligne
-        max_gap = 6  # Ecrat maximal pour considérer que c'est la même ligne
+        edges = cv.Canny(gray, 100, 200, apertureSize=3)
+        cv.imwrite('toto.jpg', edges)
+        min_len = edges.shape[0] * 0.05  # Taille minimale d'une ligne
+        max_gap = 20  # Ecrat maximal pour considérer que c'est la même ligne
         lines = cv.HoughLinesP(edges, rho=1, theta=(np.pi / 180), threshold=50,
                                minLineLength=min_len, maxLineGap=max_gap)
         
+        print(lines)
         # Séparation des lignes verticales et horizontales
         v_lines = []
         h_lines = []
@@ -141,26 +148,30 @@ class AccountStatements(TesseractDoc):
                 h_lines.append(l)
         
         # On filtre les doublons
-        v_lines = overlapping_lines_filter(v_lines, 0)
-        h_lines = overlapping_lines_filter(h_lines, 1)
+        self.v_lines = overlapping_lines_filter(v_lines, 0)
+        self.h_lines = overlapping_lines_filter(h_lines, 1)
+        self.v_lines, self.h_lines = irrelevant_lines_filter(self.v_lines, self.h_lines)
+
+        print(len(v_lines), len(h_lines))
+        print(len(self.v_lines), len(self.h_lines))
 
         # On récupère les extrémités du tableau (top, bottom, left, right)
-        if len(h_lines) < 2 or len(v_lines) < 2:
+        if len(self.h_lines) < 2 or len(self.v_lines) < 2:
             return False
-        table_shape = (h_lines[0][1], h_lines[-1][1], v_lines[0][0], v_lines[-1][0])
+        table_shape = (self.h_lines[0][1], self.h_lines[-1][1], self.v_lines[0][0], self.v_lines[-1][0])
         if self.columns is None:
-            self.columns = get_table_columns(text, bb, table_shape, v_lines)
-        if len(v_lines) - 1 != len(self.columns):
-            print('No valid table on this page :', len(v_lines), len(self.columns))
+            self.columns = get_table_columns(text, bb, table_shape, self.v_lines)
+        if self.columns is None or len(self.v_lines) - 1 != len(self.columns):
+            print('No valid table on this page :', len(self.v_lines), len(self.columns) if self.columns is not None else None)
             return False
         data = []
         for i in range(len(text)):
             row = [''] * len(self.columns)
             cnt = 0
-            for j in range(len(v_lines) - 1):
+            for j in range(len(self.v_lines) - 1):
                 words = []
                 for h, w in enumerate(text[i]):
-                    if v_lines[j][0] < bb[i][h][0] < v_lines[j+1][0] and\
+                    if self.v_lines[j][0] < bb[i][h][0] < self.v_lines[j+1][0] and\
                         table_shape[0] < bb[i][h][1] < table_shape[1]:
                         words.append(w)
                 if len(words) > 0:
@@ -184,6 +195,9 @@ class AccountStatements(TesseractDoc):
             # Get information available on the first page
             if i == 0:
                 bank_id = get_bank_id(text)
+                if bank_id is None:
+                    print('Error : unknown bank document.')
+                    return
                 self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
                 self.dicts = get_json_from_file('dict.json')
                 self.bank_name = self.bank_utils['name']
@@ -193,17 +207,14 @@ class AccountStatements(TesseractDoc):
                 self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
                 _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
             self.process_table(i, text, bb)
+            exit()
 
             if self.statement_row is not None:
                 print('Rows shape : {}'.format(self.statement_row.shape))
 
             
-            save_bb_image(self.processed_file_path[i], bb)
-            # for j in range(len(text)):
-                # print(text[j])
-                # print(conf)
-                # print(bb)
-                # print('-----------------------------------------------')
+            save_bb_image(self.processed_file_path[i], bb, self.v_lines, self.h_lines)
+
             # return
         
 

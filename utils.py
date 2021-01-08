@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import math
 import PyPDF2
 import datetime
 import subprocess
@@ -9,9 +10,17 @@ import cv2 as cv
 
 EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
 
+
+def distance(p1, p2):
+    return math.sqrt(((p1[0] - p2[0]) ** 2) + ((p1[1] - p2[1]) ** 2))
+
+
 def remove_dot_background(img, kernel=(5, 5)):
+    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    inv = cv.bitwise_not(gray)
     # Global thresholding and invert color
-    ret1, th1 = cv.threshold(img, 150, 255, cv.THRESH_BINARY_INV)
+    # ret1, th1 = cv.threshold(inv, 150, 255, cv.THRESH_BINARY_INV)
+    ret1, th1 = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
 
     # Removing noise
     cv_kernel = cv.getStructuringElement(cv.MORPH_RECT, kernel)
@@ -21,6 +30,38 @@ def remove_dot_background(img, kernel=(5, 5)):
     res = 255 - opening
 
     return res
+
+
+def calc_angle(img):
+    # gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    inv = cv.bitwise_not(img)
+    thresh = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
+
+    contours, hierarchy = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv.contourArea, reverse=True)
+    largest_contour = contours[0]
+    
+    rect = cv.minAreaRect(largest_contour)
+
+    angle = rect[-1]
+    if angle < -45:
+        angle = 90 + angle
+
+    return angle
+
+
+def rotate_img(img, angle):
+    (h, w) = img.shape[:2]
+    center = (w // 2, h // 2)
+    matrix = cv.getRotationMatrix2D(center, angle, 1)
+
+    img = cv.warpAffine(img, matrix, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+    return img
+
+
+def deskew_img(img):
+    angle = calc_angle(img)
+    return rotate_img(img, angle)
 
 
 def pdf_to_tiff(file_path):
@@ -75,6 +116,12 @@ def split_pdf_pages(input_pdf_path, target_dir, fname_fmt=u"{num_page:04d}.pdf")
             # flatten the file using getNumPages()
             input_pdf.getNumPages()  # or call input_pdf._flatten()
 
+        # ! : Il faut trouver une solution pour les documents pdf encryptés
+        # if input_pdf.isEncrypted:
+        #     print('Coucou')
+        #     input_pdf.decrypt('')
+        # print(input_pdf.getNumPages(), input_pdf.flattenedPages, input_pdf.isEncrypted)
+        # exit()
         for num_page, page in enumerate(input_pdf.flattenedPages):
             output = PyPDF2.PdfFileWriter()
             output.addPage(page)
@@ -106,12 +153,16 @@ def save_bb_image_old(img_path, data, conf_thresh=50):
     cv.imwrite(bb_img_path, img)
 
 
-def save_bb_image(img_path, bb):
+def save_bb_image(img_path, bb, v_lines, h_lines):
     img = cv.imread(img_path)
     for row in bb:
         for box in row:
             (x, y, w, h) = (box[0], box[1], box[2], box[3])
             img = cv.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    for line in v_lines:
+        img = cv.line(img, (line[0], line[1]), (line[2], line[3]), (255, 0, 0), 10)
+    for line in h_lines:
+        img = cv.line(img, (line[0], line[1]), (line[2], line[3]), (255, 0, 0), 10)
     bb_img_path = img_path.split('.')
     bb_img_path[-2] += '_bb'
     bb_img_path = '.'.join(bb_img_path)
@@ -260,11 +311,10 @@ def is_line_horizontal(line):
     return line[1] == line[3]
 
 
-def overlapping_lines_filter(lines, sort_idx):
+def overlapping_lines_filter(lines, sort_idx, threshold=20):
     filtered = []
-    
+    other_idx = 0 if sort_idx == 1 else 1
     lines = sorted(lines, key=lambda lines: lines[sort_idx])
-    threshold = 10
     
     for i in range(len(lines)):
         l = lines[i]
@@ -272,6 +322,39 @@ def overlapping_lines_filter(lines, sort_idx):
             l_prev = lines[i-1]
             if l[sort_idx] - l_prev[sort_idx] > threshold:
                 filtered.append(l)
+            else:
+                if abs(l[other_idx] - l[other_idx+2]) > abs(l_prev[other_idx] - l_prev[other_idx+2]):
+                    filtered[-1] = l
         else:
             filtered.append(l)
     return filtered
+
+
+def pt_line_collision(line, point, threshold=20):
+    dist_1 = distance(point, (line[0], line[1]))
+    dist_2 = distance(point, (line[2], line[3]))
+
+    line_len = distance((line[0], line[1]), (line[2], line[3]))
+
+    if dist_1 + dist_2 >= line_len - threshold and\
+         dist_1 + dist_2 <= line_len + threshold:
+        return True
+    return False
+
+
+def irrelevant_lines_filter(v_lines, h_lines, threshold=20):
+    filtered_v_lines = []
+    filtered_h_lines = []
+    for v_line in v_lines:
+        for h_line in h_lines:
+            if pt_line_collision(h_line, (v_line[0], v_line[1])) or\
+                pt_line_collision(h_line, (v_line[2], v_line[3])):
+                filtered_v_lines.append(v_line)
+                break
+    for h_line in h_lines:
+        for v_line in filtered_v_lines:
+            if pt_line_collision(v_line, (h_line[0], h_line[1])) or\
+                pt_line_collision(v_line, (h_line[2], h_line[3])):
+                filtered_h_lines.append(h_line)
+                break
+    return filtered_v_lines, filtered_h_lines

@@ -1,3 +1,4 @@
+import locale
 import argparse
 import pytesseract
 
@@ -16,6 +17,14 @@ def parse_args():
     parser.add_argument("-lang", type=str, default='fra', help="document language")
 
     return parser.parse_args()
+
+
+def set_locale(language):
+    lang_tab = {
+        'fra': 'fr_FR.utf8',
+        'eng': 'en_US.utf8'
+    }
+    locale.setlocale(locale.LC_ALL, lang_tab[language])
 
 
 def account_statements(path, language):
@@ -50,6 +59,8 @@ if __name__ == '__main__':
 
     if args.path is None and args.path_file is None:
         print('Error: You must give a path to a document. Use python ocr_cezam.py -h for more information.')
+
+    set_locale(args.lang)
 
     # Get image class
     image = get_image(args.path, args.type, args.lang)
