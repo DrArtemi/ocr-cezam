@@ -1,4 +1,4 @@
 {
     "address": ["rue", "avenue", "ave", "route"],
-    "phone": ["tel", "tel:", "tél", "tél:"]
+    "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."]
 }

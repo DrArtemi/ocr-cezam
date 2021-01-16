@@ -2,13 +2,28 @@ import os
 import re
 import json
 import math
+import time
 import PyPDF2
 import datetime
 import subprocess
 
 import cv2 as cv
+import numpy as np
+
+from skimage import morphology
 
 EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+
+
+def timing(f):
+    def wrap(*args, **kwargs):
+        time1 = time.time()
+        ret = f(*args, **kwargs)
+        time2 = time.time()
+        print('{:s} function took {:.3f} ms'.format(f.__name__, (time2-time1)*1000.0))
+
+        return ret
+    return wrap
 
 
 def distance(p1, p2):
@@ -19,21 +34,24 @@ def remove_dot_background(img, kernel=(5, 5)):
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     inv = cv.bitwise_not(gray)
     # Global thresholding and invert color
-    # ret1, th1 = cv.threshold(inv, 150, 255, cv.THRESH_BINARY_INV)
-    ret1, th1 = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
+    ret1, th1 = cv.threshold(inv, 250, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
 
     # Removing noise
     cv_kernel = cv.getStructuringElement(cv.MORPH_RECT, kernel)
-    opening = cv.morphologyEx(th1, cv.MORPH_OPEN, cv_kernel)
+    opening = cv.morphologyEx(th1, cv.MORPH_OPEN, cv_kernel, iterations=1)
+    
+    cleaned = morphology.remove_small_objects(opening > 100, min_size=100, connectivity=1)
+    cleaned = cleaned.astype('uint8') * 255
+    cleaned = cv.morphologyEx(cleaned, cv.MORPH_CLOSE, cv_kernel, iterations=1)
 
+    
     # Re-invert color
-    res = 255 - opening
+    res = 255 - cleaned
 
     return res
 
 
 def calc_angle(img):
-    # gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     inv = cv.bitwise_not(img)
     thresh = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
 
@@ -46,6 +64,10 @@ def calc_angle(img):
     angle = rect[-1]
     if angle < -45:
         angle = 90 + angle
+
+    # * Les images ne devraient pas être décalées de plus de 45°, donc on ne fait rien.
+    if angle > 45 or angle < -45:
+        angle = 0
 
     return angle
 
@@ -61,6 +83,10 @@ def rotate_img(img, angle):
 
 def deskew_img(img):
     angle = calc_angle(img)
+    
+    # On ne rotationne pas l'image si l'angle est trop faible pour gagner du temps.
+    if -0.1 < angle < 0.1:
+        return img
     return rotate_img(img, angle)
 
 
@@ -311,7 +337,7 @@ def is_line_horizontal(line):
     return line[1] == line[3]
 
 
-def overlapping_lines_filter(lines, sort_idx, threshold=20):
+def overlapping_lines_filter(lines, sort_idx, threshold=50):
     filtered = []
     other_idx = 0 if sort_idx == 1 else 1
     lines = sorted(lines, key=lambda lines: lines[sort_idx])
@@ -319,18 +345,24 @@ def overlapping_lines_filter(lines, sort_idx, threshold=20):
     for i in range(len(lines)):
         l = lines[i]
         if i > 0:
-            l_prev = lines[i-1]
-            if l[sort_idx] - l_prev[sort_idx] > threshold:
+            if l[sort_idx] - filtered[-1][sort_idx] > threshold:
                 filtered.append(l)
             else:
-                if abs(l[other_idx] - l[other_idx+2]) > abs(l_prev[other_idx] - l_prev[other_idx+2]):
-                    filtered[-1] = l
+                # if abs(l[other_idx] - l[other_idx+2]) > abs(l_prev[other_idx] - l_prev[other_idx+2]):
+                if sort_idx == 0:
+                    if not filtered[-1][other_idx] < l[other_idx+2] or not l[other_idx] < filtered[-1][other_idx+2]:
+                        filtered[-1][other_idx] = max(l[other_idx], filtered[-1][other_idx])
+                        filtered[-1][other_idx+2] = min(l[other_idx+2], filtered[-1][other_idx+2])
+                else:
+                    if not filtered[-1][other_idx+2] < l[other_idx] or not l[other_idx+2] < filtered[-1][other_idx]:
+                        filtered[-1][other_idx] = min(l[other_idx], filtered[-1][other_idx])
+                        filtered[-1][other_idx+2] = max(l[other_idx+2], filtered[-1][other_idx+2])
         else:
             filtered.append(l)
     return filtered
 
 
-def pt_line_collision(line, point, threshold=20):
+def pt_line_collision(line, point, threshold=50):
     dist_1 = distance(point, (line[0], line[1]))
     dist_2 = distance(point, (line[2], line[3]))
 

@@ -87,6 +87,10 @@ class AccountStatements(TesseractDoc):
 
             # Convert tiff to cv2 img
             img = cv.imread(tiff_path)
+            
+            if img is None:
+                print('Error while trying to load {}.'.format(tiff_path))
+                continue
 
             # Remove noise background
             img = remove_dot_background(img, kernel=(7, 7))
@@ -129,14 +133,32 @@ class AccountStatements(TesseractDoc):
         img = cv.imread(file)
         # Extraction des lignes du tableau
         gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        edges = cv.Canny(gray, 100, 200, apertureSize=3)
-        cv.imwrite('toto.jpg', edges)
-        min_len = edges.shape[0] * 0.05  # Taille minimale d'une ligne
+
+        inv = cv.bitwise_not(gray)
+        ret1, th1 = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
+
+        kernel_len = np.array(img).shape[1] // 100
+        ver_kernel = cv.getStructuringElement(cv.MORPH_RECT, (1, kernel_len))
+        hor_kernel = cv.getStructuringElement(cv.MORPH_RECT, (kernel_len, 1))
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (2, 2))
+        
+        image_1 = cv.erode(th1, ver_kernel, iterations=3)
+        vertical_lines = cv.dilate(image_1, ver_kernel, iterations=3)
+        
+        image_2 = cv.erode(th1, hor_kernel, iterations=3)
+        horizontal_lines = cv.dilate(image_2, hor_kernel, iterations=3)
+        
+        img_vh = cv.addWeighted(vertical_lines, 0.5, horizontal_lines, 0.5, 0.0)
+        img_vh = cv.erode(~img_vh, kernel, iterations=2)
+        thresh, img_vh = cv.threshold(img_vh, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
+        img_vh = 255 - img_vh
+        
+        min_len = gray.shape[0] * 0.05  # Taille minimale d'une ligne
         max_gap = 20  # Ecrat maximal pour considérer que c'est la même ligne
-        lines = cv.HoughLinesP(edges, rho=1, theta=(np.pi / 180), threshold=50,
+        lines = cv.HoughLinesP(img_vh, rho=1, theta=(np.pi / 180), threshold=50,
                                minLineLength=min_len, maxLineGap=max_gap)
         
-        print(lines)
+        print('-- Infos --')
         # Séparation des lignes verticales et horizontales
         v_lines = []
         h_lines = []
@@ -146,14 +168,11 @@ class AccountStatements(TesseractDoc):
                 v_lines.append(l)
             elif is_line_horizontal(l):
                 h_lines.append(l)
-        
+
         # On filtre les doublons
         self.v_lines = overlapping_lines_filter(v_lines, 0)
         self.h_lines = overlapping_lines_filter(h_lines, 1)
         self.v_lines, self.h_lines = irrelevant_lines_filter(self.v_lines, self.h_lines)
-
-        print(len(v_lines), len(h_lines))
-        print(len(self.v_lines), len(self.h_lines))
 
         # On récupère les extrémités du tableau (top, bottom, left, right)
         if len(self.h_lines) < 2 or len(self.v_lines) < 2:
@@ -207,7 +226,7 @@ class AccountStatements(TesseractDoc):
                 self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
                 _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
             self.process_table(i, text, bb)
-            exit()
+            # exit()
 
             if self.statement_row is not None:
                 print('Rows shape : {}'.format(self.statement_row.shape))

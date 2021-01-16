@@ -9,7 +9,6 @@ def parse_args():
     parser = argparse.ArgumentParser("OCR")
 
     parser.add_argument("-path", type=str, default=None, help="path to document", required=True)
-    parser.add_argument("-path-file", type=str, default=None, help="path to file that lists documents")
 
     parser.add_argument("-type", type=int, default=0,
                         help="type of the document [0 = relevé de compte, 1 = avis d'imposition, 2 = piece d'identite]",
@@ -57,7 +56,7 @@ if __name__ == '__main__':
     print('TESSERACT VERSION : {}'.format(pytesseract.get_tesseract_version()))
     print('*******************************************')
 
-    if args.path is None and args.path_file is None:
+    if args.path is None:
         print('Error: You must give a path to a document. Use python ocr_cezam.py -h for more information.')
 
     set_locale(args.lang)
