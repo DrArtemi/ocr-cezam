@@ -242,7 +242,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     # Load image as 1D array
     img = cv2.imread(file_path, 0)
     if img is None:
-        print('Error while trying to load {}'.format(file_path))
+        print('Process table : error while trying to load {}'.format(file_path))
         return []
     
     # thresholding the image to a binary image (only 0 or 255)

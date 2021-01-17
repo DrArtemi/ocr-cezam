@@ -80,11 +80,9 @@ if __name__ == '__main__':
     print('Email : {}'.format(image.agency_email))
 
     print('Client info :')
-    print('First name : {}'.format(image.first_name))
-    print('Last name : {}'.format(image.last_name))
+    print('Full name : {}'.format(image.full_name))
     print('Address : {}'.format(image.address))
-    print('Month : {}'.format(image.statement_month))
-    print('Year : {}'.format(image.statement_year))
+    print('Date : {}'.format(image.statement_date))
 
     print('Relevé :')
     print(image.statement_tables)
