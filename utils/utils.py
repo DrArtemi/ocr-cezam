@@ -1,18 +1,98 @@
 import os
 import re
+import cv2
 import json
 import math
 import time
+import PyPDF2
 import datetime
 import subprocess
 
-import cv2 as cv
 import numpy as np
 
 from skimage import morphology
 from pdf2image import convert_from_path
 
 EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
+
+
+def pdf_to_jpg(file_path, dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+        
+    if not os.path.exists(file_path):
+        print('Error: {}: file not found.'.format(file_path))
+        return None
+
+    pages = convert_from_path(file_path)
+
+    pages_path = []
+    for i, page in enumerate(pages):
+        pages_path.append(os.path.join(dir_path, 'page_{}.jpg'.format(i)))
+        page.save(pages_path[-1], 'JPEG')
+    return pages_path
+
+
+def save_cv_image(img, original_path, extension, del_original=False):
+        new_path = original_path.split('.')[:-1]
+        new_path[-1] += '_processed'
+        new_path.append(extension)
+        new_path = '.'.join(new_path)
+
+        if os.path.exists(new_path):
+            os.remove(new_path)
+        if del_original:
+            os.remove(original_path)
+        cv2.imwrite(new_path, img)
+
+        return new_path
+    
+
+def process_text(text_data):
+    word_list = []
+    conf_list = []
+    bb_list = []
+    parse_text = []
+    parse_conf = []
+    parse_bb = []
+    last_word = ''
+    for i, word in enumerate(text_data['text']):
+        if word != '':
+            word_list.append(word)
+            conf_list.append(text_data['conf'][i])
+            bb_list.append([text_data['left'][i],
+                            text_data['top'][i],
+                            text_data['width'][i],
+                            text_data['height'][i]])
+            last_word = word
+        if (last_word != '' and word == '') or (i == len(text_data['text']) - 1):
+            if len(word_list) > 0:
+                parse_text.append(word_list)
+                parse_conf.append(conf_list)
+                parse_bb.append(bb_list)
+            word_list = []
+            conf_list = []
+            bb_list = []
+    return parse_text, parse_conf, parse_bb
+
+
+def flatten(list_of_lists):
+    """Flatten ND list to 1D list.
+
+    Args:
+        list_of_lists (list): List to flatten.
+
+    Returns:
+        list: Flattened 1D list.
+    """
+    if len(list_of_lists) == 0:
+        return list_of_lists
+    if isinstance(list_of_lists[0], list):
+        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+    return list_of_lists[:1] + flatten(list_of_lists[1:])
+
+
+#! Ce qui est en dessous est inutilisé
 
 
 def timing(f):
@@ -51,62 +131,6 @@ def remove_dot_background(img, kernel=(5, 5)):
     return res
 
 
-def calc_angle(img):
-    inv = cv.bitwise_not(img)
-    thresh = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
-
-    contours, hierarchy = cv.findContours(thresh, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv.contourArea, reverse=True)
-    largest_contour = contours[0]
-    
-    rect = cv.minAreaRect(largest_contour)
-
-    angle = rect[-1]
-    if angle < -45:
-        angle = 90 + angle
-
-    # * Les images ne devraient pas être décalées de plus de 45°, donc on ne fait rien.
-    if angle > 45 or angle < -45:
-        angle = 0
-
-    return angle
-
-
-def rotate_img(img, angle):
-    (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
-    matrix = cv.getRotationMatrix2D(center, angle, 1)
-
-    img = cv.warpAffine(img, matrix, (w, h), flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
-    return img
-
-
-def deskew_img(img):
-    angle = calc_angle(img)
-    
-    # On ne rotationne pas l'image si l'angle est trop faible pour gagner du temps.
-    if -0.1 < angle < 0.1:
-        return img
-    return rotate_img(img, angle)
-
-
-def pdf_to_jpg(file_path, dir_path):
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-        
-    if not os.path.exists(file_path):
-        print('Error: {}: file not found.'.format(file_path))
-        return None
-
-    pages = convert_from_path(file_path)
-
-    pages_path = []
-    for i, page in enumerate(pages):
-        pages_path.append(os.path.join(dir_path, 'page_{}.jpg').format(i))
-        page.save(pages_path[-1], 'JPEG')
-    return pages_path
-
-
 def pdf_to_tiff(file_path):
     if not os.path.exists(file_path):
         print('Error: {}: file not found.'.format(file_path))
@@ -120,29 +144,15 @@ def pdf_to_tiff(file_path):
         os.remove(file_path_tiff)
 
     subprocess.run(['convert',
-                    '-density', '300',
+                    '-density', '1200',
                     file_path,
                     '-background', 'white',
                     '-alpha', 'background',
                     '-alpha', 'off',
+                    '-depth', '8',
                     file_path_tiff])
     
     return file_path_tiff
-
-
-def save_cv_image(img, original_path, extension, del_original=False):
-        new_path = original_path.split('.')[:-1]
-        new_path.append(extension)
-        new_path = '.'.join(new_path)
-
-        if os.path.exists(new_path):
-            os.remove(new_path)
-
-        cv.imwrite(new_path, img)
-
-        if del_original:
-            os.remove(original_path)
-        return new_path
 
 
 def split_pdf_pages(input_pdf_path, target_dir, fname_fmt=u"{num_page:04d}.pdf"):

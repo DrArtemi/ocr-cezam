@@ -70,7 +70,8 @@ if __name__ == '__main__':
     # Extract image information
     print('PDF path : {}'.format(image.file_path))
     print('Processed path : {}'.format(image.processed_file_path))
-    image.extract_text(save_file=True)
+    #? Pas sur que l'extract text à cet endroit soit pertinent
+    # image.extract_text(save_file=True)
     image.parse_fields()
     print('Bank info :')
     print('Name : {}'.format(image.bank_name))
@@ -86,6 +87,6 @@ if __name__ == '__main__':
     print('Year : {}'.format(image.statement_year))
 
     print('Relevé :')
-    print(image.statement_row)
+    print(image.statement_tables)
     # print('TEXT :\n {}'.format(image.file_text_data['text']))
     # print('TEXT :\n {}'.format(image.file_text_data))

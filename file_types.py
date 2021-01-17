@@ -10,7 +10,9 @@ import pandas as pd
 from PIL import Image
 from pytesseract.pytesseract import Output
 
-from utils import *
+from utils.process_table import process_tables
+from utils.deskew_image import deskew_img
+from utils.utils import *
 
 
 class TesseractDoc:
@@ -25,6 +27,7 @@ class TesseractDoc:
         self.file_text_data = []
         self.images_size = []
     
+    #! Pas utilisé pour l'instant
     def extract_text(self, save_file=False):
         self.file_text_data = []
         self.images_size = []
@@ -67,8 +70,8 @@ class AccountStatements(TesseractDoc):
         self.statement_year = ''
         self.statement_month = ''
 
-        # Statement rows (date, libellé, montant)
-        self.statement_row = None
+        # Statement rows (date, libellé, montant) sous forme de dataframe
+        self.statement_tables = []
         self.columns = None
         self.v_lines = None
         self.h_lines = None
@@ -79,27 +82,84 @@ class AccountStatements(TesseractDoc):
         super().__init__(file_path, language)
     
     def processing(self):
-        paths = split_pdf_pages(self.file_path, self.folder_path)
+        paths = pdf_to_jpg(self.file_path, self.folder_path)
 
         for path in paths:
-            # Convert pdf to tiff to be able to process it
-            tiff_path = pdf_to_tiff(path)
 
             # Convert tiff to cv2 img
-            img = cv.imread(tiff_path)
+            img = cv.imread(path, 0)
             
             if img is None:
-                print('Error while trying to load {}.'.format(tiff_path))
+                print('Error while trying to load {}'.format(path))
                 continue
-
-            # Remove noise background
-            img = remove_dot_background(img, kernel=(7, 7))
 
             # Rotate img
             img = deskew_img(img)
 
             # Save image to jpg and remove tiff
-            self.processed_file_path.append(save_cv_image(img, tiff_path, 'jpg', del_original=True))
+            self.processed_file_path.append(save_cv_image(img, path, 'jpg', del_original=True))
+    
+    def parse_fields(self):
+        #TODO Ici l'idée ce serait pour chaque chaque field de :
+        #TODO   - Zoom sur la zone passée dans le json
+        #TODO   - Clean la zone (genre si y a un fond ou des points)
+        #TODO   - Extraire le texte
+        #TODO   - Traiter le texte pour en sortir que l'info attendue
+        #TODO En plus de ça il faut extraire le(s) tableau(x) et leurs données
+        #TODO Et si tout ça c'est bien fait ben jsuis juste un bg
+        
+        debug_folder = os.path.join(self.folder_path, 'debug')
+        if not os.path.exists(debug_folder):
+            os.makedirs(debug_folder)
+        
+        # * Process tables, récupère une liste de dataframes
+        #? Si j'ai deux dataframes avec le même nombre de colonnes je fais quoi ?
+        #?  - Je les merge
+        #?  - Je les laisse séparés
+        #? Pour le reste, j'en fais un excel ? Plusieurs tableaux dans le même doc ?
+        #? Une sheet par table ? Un excel par table ?
+        print('Processing tables...\r', end='')
+        for i, path in enumerate(self.processed_file_path):
+            self.statement_tables += process_tables(
+                path,
+                arrange_mode=1,
+                debug_folder=os.path.join(debug_folder, 'page_{}'.format(i))
+            )
+        print('Processing tables... DONE')
+        
+        # Save tables to excel files
+        for i, df in enumerate(self.statement_tables):
+            df.to_excel(os.path.join(self.folder_path, 'df{}.xlsx'.format(i)))
+                
+    
+    def parse_fields_old(self):
+        for i, text_data in enumerate(self.file_text_data):
+            text, conf, bb = self.process_text(text_data)
+            
+            # Get information available on the first page
+            if i == 0:
+                bank_id = get_bank_id(text)
+                if bank_id is None:
+                    print('Error : unknown bank document.')
+                    return
+                self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
+                self.dicts = get_json_from_file('dict.json')
+                self.bank_name = self.bank_utils['name']
+                self.last_name, self.first_name = get_client_name(text)
+                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_utils, self.dicts)
+                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_utils, self.dicts)
+                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
+                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
+            self.process_table(i, text, bb)
+            # exit()
+
+            if self.statement_row is not None:
+                print('Rows shape : {}'.format(self.statement_row.shape))
+
+            
+            save_bb_image(self.processed_file_path[i], bb, self.v_lines, self.h_lines)
+
+            # return
     
     def process_text(self, text_data):
         word_list = []
@@ -205,36 +265,6 @@ class AccountStatements(TesseractDoc):
             tmp_statement = pd.DataFrame(data, columns=self.columns)
             self.statement_row = self.statement_row.append(tmp_statement, ignore_index=True)
         return True
-
-       
-    def parse_fields(self):
-        for i, text_data in enumerate(self.file_text_data):
-            text, conf, bb = self.process_text(text_data)
-            
-            # Get information available on the first page
-            if i == 0:
-                bank_id = get_bank_id(text)
-                if bank_id is None:
-                    print('Error : unknown bank document.')
-                    return
-                self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
-                self.dicts = get_json_from_file('dict.json')
-                self.bank_name = self.bank_utils['name']
-                self.last_name, self.first_name = get_client_name(text)
-                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_utils, self.dicts)
-                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_utils, self.dicts)
-                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
-                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
-            self.process_table(i, text, bb)
-            # exit()
-
-            if self.statement_row is not None:
-                print('Rows shape : {}'.format(self.statement_row.shape))
-
-            
-            save_bb_image(self.processed_file_path[i], bb, self.v_lines, self.h_lines)
-
-            # return
         
 
 class TaxNotice:
