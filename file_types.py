@@ -1,16 +1,12 @@
-import pytesseract
-import errno
-import csv
+from utils.process_fields import get_agency_information, get_bank_id, get_client_information, get_date
 import os
 
 import cv2 as cv
-import numpy as np
 import pandas as pd
 
-from PIL import Image
-from pytesseract.pytesseract import Output
-
-from utils import *
+from utils.process_table import process_tables
+from utils.deskew_image import deskew_img
+from utils.utils import *
 
 
 class TesseractDoc:
@@ -23,24 +19,6 @@ class TesseractDoc:
         self.processed_file_path = []
 
         self.file_text_data = []
-        self.images_size = []
-    
-    def extract_text(self, save_file=False):
-        self.file_text_data = []
-        self.images_size = []
-
-        if self.processed_file_path is None:
-            print('Error: {}: Processed file not found.'.format(self.processed_file_path))
-        
-        custom_config = r'--oem 3 --psm 4'
-        for i, processed_fp in enumerate(self.processed_file_path):
-            img = Image.open(processed_fp)
-            self.images_size.append(img.size)
-            res = pytesseract.image_to_data(img,
-                                            output_type=Output.DICT,
-                                            config=custom_config,
-                                            lang=self.language)
-            self.file_text_data.append(res)
 
     def parse_fields(self):
         raise NotImplemented
@@ -51,7 +29,142 @@ class TesseractDoc:
 
 class AccountStatements(TesseractDoc):
 
-    def __init__(self, file_path, language):
+    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
+        self.debug = debug
+        
+        self.idx = idx
+        self.sheet_name = 'Account statement {}'.format(self.idx)
+        
+        # Bank infos
+        self.information = {
+            "Bank name": "N/A",
+            "Agency address": "N/A",
+            "Agency phone": "N/A",
+            "Agency email": "N/A",
+            "Consultant phone": "N/A",
+            "Consultant email": "N/A",
+            "Client full name": "N/A",
+            "Client address": "N/A",
+            "Date": "N/A"
+        }
+        
+        # Statement rows (date, libellé, montant) sous forme de dataframe
+        self.statement_tables = []
+        
+        self.excel_writer = excel_writer
+        self.row = 0
+
+        super().__init__(file_path, language)
+    
+    def processing(self):
+        paths = pdf_to_jpg(self.file_path, self.folder_path)
+
+        for i, path in enumerate(paths):
+
+            # Convert tiff to cv2 img
+            img = cv.imread(path, 0)
+            
+            if img is None:
+                print('Error while trying to load {}'.format(path))
+                continue
+
+            # Rotate img
+            img = deskew_img(img)
+
+            # Save image to jpg and remove tiff
+            self.processed_file_path.append(save_cv_image(img, path, 'jpg', del_original=True))
+    
+    def parse_fields(self):
+        
+        debug_folder = os.path.join(self.folder_path, 'debug')
+        if not os.path.exists(debug_folder):
+            os.makedirs(debug_folder)
+        
+        # Load first page as 1D array
+        first_page = cv2.imread(self.processed_file_path[0], 0)
+        if first_page is None:
+            print('Parse fields : error while trying to load {}'.format(self.processed_file_path[0]))
+            return
+            
+        #* Process bank id
+        # Bank id should be on first page
+        print('Finding bank...\r', end='')
+        bank_id = get_bank_id(first_page)
+        if bank_id is None:
+            print('Error : unknown bank document.')
+            return
+        # With bank id we can get bank information
+        self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
+        self.dicts = get_json_from_file('dict.json')
+        self.information["Bank name"] = self.bank_utils['name']
+        print('Finding bank... DONE')
+        
+        #* Process fields
+        print('Processing fields...\r', end='')
+        # Process client information (should be in first page)
+        self.information["Client full name"],\
+        self.information["Client address"] = get_client_information(
+            first_page,
+            self.bank_utils,
+            self.dicts,
+            os.path.join(debug_folder, 'client_info.jpg') if self.debug else None
+        )
+        # Process Bank information
+        self.information["Agency email"],\
+        self.information["Agency phone"],\
+        self.information["Agency address"] = get_agency_information(
+            first_page,
+            self.bank_utils,
+            self.dicts,
+            os.path.join(debug_folder, 'agency_info.jpg') if self.debug else None
+        )
+        self.information["Date"] = get_date(
+            first_page,
+            self.bank_utils,
+            os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
+        )
+        self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
+        
+        infos_df = pd.DataFrame.from_dict(self.information, orient='index')
+        infos_df.to_excel(self.excel_writer,
+                          sheet_name=self.sheet_name,
+                          startcol=0, startrow=self.row)
+        self.row += len(self.information) + 2
+        print('Processing fields... [DONE]')
+        
+        #* Process tables
+        print('Processing tables...\r', end='')
+        page_tables = []
+        for i, path in enumerate(self.processed_file_path):
+            page_tables += process_tables(
+                path,
+                arrange_mode=1,
+                debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
+            )
+            
+        dfs_len = set([len(df.columns) for df in page_tables])
+        self.statement_tables = [None] * len(dfs_len)
+        for i, df_len in enumerate(dfs_len):
+            for df in page_tables:
+                if len(df.columns) == df_len:
+                    if self.statement_tables[i] is not None:
+                        df.columns = self.statement_tables[i].columns
+                    self.statement_tables[i] = df if self.statement_tables[i] is None\
+                        else pd.concat([self.statement_tables[i], df], ignore_index=True)
+
+        self.statement_tables.sort(key = lambda df: len(df.index), reverse=True)
+        # Save tables to excel files
+        for i, df in enumerate(self.statement_tables):
+            df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
+            self.row += len(df.index) + 2
+        print('Processing tables... [DONE]')
+                            
+
+class TaxNotice:
+
+    def __init__(self, file_path, language, debug=False):
+        self.debug = debug
+        
         # Bank infos
         self.bank_name = ''
         self.agency_address = ''
@@ -61,186 +174,85 @@ class AccountStatements(TesseractDoc):
         self.consultant_email = ''
 
         # Cient infos
-        self.last_name = ''
-        self.first_name = ''
+        self.full_name = ''
         self.address = ''
-        self.statement_year = ''
-        self.statement_month = ''
+        self.statement_date = None
 
-        # Statement rows (date, libellé, montant)
-        self.statement_row = None
-        self.columns = None
-        self.v_lines = None
-        self.h_lines = None
-
-        # Image list of pdf
-        self.images = []
+        # Statement rows (date, libellé, montant) sous forme de dataframe
+        self.statement_tables = []
 
         super().__init__(file_path, language)
     
     def processing(self):
-        paths = split_pdf_pages(self.file_path, self.folder_path)
+        paths = pdf_to_jpg(self.file_path, self.folder_path)
 
-        for path in paths:
-            # Convert pdf to tiff to be able to process it
-            tiff_path = pdf_to_tiff(path)
+        for i, path in enumerate(paths):
 
             # Convert tiff to cv2 img
-            img = cv.imread(tiff_path)
+            img = cv.imread(path, 0)
             
             if img is None:
-                print('Error while trying to load {}.'.format(tiff_path))
+                print('Error while trying to load {}'.format(path))
                 continue
-
-            # Remove noise background
-            img = remove_dot_background(img, kernel=(7, 7))
 
             # Rotate img
             img = deskew_img(img)
 
             # Save image to jpg and remove tiff
-            self.processed_file_path.append(save_cv_image(img, tiff_path, 'jpg', del_original=True))
+            self.processed_file_path.append(save_cv_image(img, path, 'jpg', del_original=True))
     
-    def process_text(self, text_data):
-        word_list = []
-        conf_list = []
-        bb_list = []
-        parse_text = []
-        parse_conf = []
-        parse_bb = []
-        last_word = ''
-        for i, word in enumerate(text_data['text']):
-            if word != '':
-                word_list.append(word)
-                conf_list.append(text_data['conf'][i])
-                bb_list.append((text_data['left'][i],
-                                text_data['top'][i],
-                                text_data['width'][i],
-                                text_data['height'][i]))
-                last_word = word
-            if (last_word != '' and word == '') or (i == len(text_data['text']) - 1):
-                if len(word_list) > 0:
-                    parse_text.append(word_list)
-                    parse_conf.append(conf_list)
-                    parse_bb.append(bb_list)
-                word_list = []
-                conf_list = []
-                bb_list = []
-        return parse_text, parse_conf, parse_bb
-    
-    def process_table(self, idx, text, bb):
-        file = self.processed_file_path[idx]
-        img = cv.imread(file)
-        # Extraction des lignes du tableau
-        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-        inv = cv.bitwise_not(gray)
-        ret1, th1 = cv.threshold(inv, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
-
-        kernel_len = np.array(img).shape[1] // 100
-        ver_kernel = cv.getStructuringElement(cv.MORPH_RECT, (1, kernel_len))
-        hor_kernel = cv.getStructuringElement(cv.MORPH_RECT, (kernel_len, 1))
-        kernel = cv.getStructuringElement(cv.MORPH_RECT, (2, 2))
-        
-        image_1 = cv.erode(th1, ver_kernel, iterations=3)
-        vertical_lines = cv.dilate(image_1, ver_kernel, iterations=3)
-        
-        image_2 = cv.erode(th1, hor_kernel, iterations=3)
-        horizontal_lines = cv.dilate(image_2, hor_kernel, iterations=3)
-        
-        img_vh = cv.addWeighted(vertical_lines, 0.5, horizontal_lines, 0.5, 0.0)
-        img_vh = cv.erode(~img_vh, kernel, iterations=2)
-        thresh, img_vh = cv.threshold(img_vh, 0, 255, cv.THRESH_BINARY | cv.THRESH_OTSU)
-        img_vh = 255 - img_vh
-        
-        min_len = gray.shape[0] * 0.05  # Taille minimale d'une ligne
-        max_gap = 20  # Ecrat maximal pour considérer que c'est la même ligne
-        lines = cv.HoughLinesP(img_vh, rho=1, theta=(np.pi / 180), threshold=50,
-                               minLineLength=min_len, maxLineGap=max_gap)
-        
-        print('-- Infos --')
-        # Séparation des lignes verticales et horizontales
-        v_lines = []
-        h_lines = []
-        for i in range(len(lines)):
-            l = lines[i][0]
-            if is_line_vertical(l):
-                v_lines.append(l)
-            elif is_line_horizontal(l):
-                h_lines.append(l)
-
-        # On filtre les doublons
-        self.v_lines = overlapping_lines_filter(v_lines, 0)
-        self.h_lines = overlapping_lines_filter(h_lines, 1)
-        self.v_lines, self.h_lines = irrelevant_lines_filter(self.v_lines, self.h_lines)
-
-        # On récupère les extrémités du tableau (top, bottom, left, right)
-        if len(self.h_lines) < 2 or len(self.v_lines) < 2:
-            return False
-        table_shape = (self.h_lines[0][1], self.h_lines[-1][1], self.v_lines[0][0], self.v_lines[-1][0])
-        if self.columns is None:
-            self.columns = get_table_columns(text, bb, table_shape, self.v_lines)
-        if self.columns is None or len(self.v_lines) - 1 != len(self.columns):
-            print('No valid table on this page :', len(self.v_lines), len(self.columns) if self.columns is not None else None)
-            return False
-        data = []
-        for i in range(len(text)):
-            row = [''] * len(self.columns)
-            cnt = 0
-            for j in range(len(self.v_lines) - 1):
-                words = []
-                for h, w in enumerate(text[i]):
-                    if self.v_lines[j][0] < bb[i][h][0] < self.v_lines[j+1][0] and\
-                        table_shape[0] < bb[i][h][1] < table_shape[1]:
-                        words.append(w)
-                if len(words) > 0:
-                    row[j] = ' '.join(words)
-                    cnt += 1
-            if cnt > 0:
-                data.append(row)
-        
-        if self.statement_row is None:
-            self.statement_row = pd.DataFrame(data, columns=self.columns)
-        else:
-            tmp_statement = pd.DataFrame(data, columns=self.columns)
-            self.statement_row = self.statement_row.append(tmp_statement, ignore_index=True)
-        return True
-
-       
     def parse_fields(self):
-        for i, text_data in enumerate(self.file_text_data):
-            text, conf, bb = self.process_text(text_data)
-            
-            # Get information available on the first page
-            if i == 0:
-                bank_id = get_bank_id(text)
-                if bank_id is None:
-                    print('Error : unknown bank document.')
-                    return
-                self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
-                self.dicts = get_json_from_file('dict.json')
-                self.bank_name = self.bank_utils['name']
-                self.last_name, self.first_name = get_client_name(text)
-                self.agency_address, self.address = get_addresses(text, bb, self.images_size[i], self.bank_utils, self.dicts)
-                self.agency_phone = get_agency_phone(text, bb, self.images_size[i], self.bank_utils, self.dicts)
-                self.agency_email = get_agency_email(text, bb, self.images_size[i], self.bank_utils)
-                _, self.statement_month, self.statement_year = get_date(text, bb, self.images_size[i], self.bank_utils)
-            self.process_table(i, text, bb)
-            # exit()
-
-            if self.statement_row is not None:
-                print('Rows shape : {}'.format(self.statement_row.shape))
-
-            
-            save_bb_image(self.processed_file_path[i], bb, self.v_lines, self.h_lines)
-
-            # return
         
-
-class TaxNotice:
-
-    def __init__():
-        pass
+        debug_folder = os.path.join(self.folder_path, 'debug')
+        if not os.path.exists(debug_folder):
+            os.makedirs(debug_folder)
+        
+        # Load first page as 1D array
+        first_page = cv2.imread(self.processed_file_path[0], 0)
+        if first_page is None:
+            print('Parse fields : error while trying to load {}'.format(self.processed_file_path[0]))
+            return
+        
+        # #* Process fields
+        #TODO Process tax notice fields
+        # print('Processing fields...\r', end='')
+        # # Process client information (should be in first page)
+        # self.full_name, self.address = get_client_information(
+        #     first_page,
+        #     self.bank_utils,
+        #     self.dicts,
+        #     os.path.join(debug_folder, 'client_info.jpg') if self.debug else None
+        # )
+        # # Process Bank information
+        # self.agency_email, self.agency_phone, self.agency_address = get_agency_information(
+        #     first_page,
+        #     self.bank_utils,
+        #     self.dicts,
+        #     os.path.join(debug_folder, 'agency_info.jpg') if self.debug else None
+        # )
+        # self.statement_date = get_date(
+        #     first_page,
+        #     self.bank_utils,
+        #     os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
+        # )
+        # print('Processing fields... [DONE]')
+        
+        #* Process tables
+        print('Processing tables...\r', end='')
+        for i, path in enumerate(self.processed_file_path):
+            if i == 0:
+                continue
+            self.statement_tables += process_tables(
+                path,
+                arrange_mode=1,
+                debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
+                semiopen_table=True
+            )
+        print('Processing tables... DONE')
+        
+        # Save tables to excel files
+        for i, df in enumerate(self.statement_tables):
+            df.to_excel(os.path.join(self.folder_path, 'df{}.xlsx'.format(i)))
 
 
 class IdentityDocument(TesseractDoc):

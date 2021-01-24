@@ -1,6 +1,9 @@
 import locale
 import argparse
+from utils.utils import get_json_from_file
 import pytesseract
+
+import pandas as pd
 
 from file_types import IdentityDocument, TaxNotice, AccountStatements
 
@@ -8,11 +11,8 @@ from file_types import IdentityDocument, TaxNotice, AccountStatements
 def parse_args():
     parser = argparse.ArgumentParser("OCR")
 
-    parser.add_argument("-path", type=str, default=None, help="path to document", required=True)
-
-    parser.add_argument("-type", type=int, default=0,
-                        help="type of the document [0 = relevé de compte, 1 = avis d'imposition, 2 = piece d'identite]",
-                        required=True)
+    parser.add_argument("-config", type=str, default=None, help="path to document", required=True)
+    
     parser.add_argument("-lang", type=str, default='fra', help="document language")
 
     return parser.parse_args()
@@ -26,66 +26,61 @@ def set_locale(language):
     locale.setlocale(locale.LC_ALL, lang_tab[language])
 
 
-def account_statements(path, language):
-    return AccountStatements(path, language=language)
+def account_statements(path, language, excel_writer, idx, debug):
+    return AccountStatements(path, language, excel_writer, idx=idx, debug=debug)
 
 
-def tax_notice(path, language):
-    return TaxNotice(path, language=language)
+def tax_notice(path, language, excel_writer, idx, debug):
+    return TaxNotice(path, language, excel_writer, idx=idx, debug=debug)
 
 
 def identity_document(path, language):
     return IdentityDocument(path, language=language)
 
 
-def get_image(path, doc_type, language):
+def get_image(path, doc_type, language, excel_writer, idx, debug):
     switcher = {
-        0: account_statements,
-        1: tax_notice,
-        2: identity_document
+        "account_statements": account_statements,
+        "tax_notices": tax_notice,
+        "identity_documents": identity_document
     }
     image_class = switcher.get(doc_type)
-    return image_class(path, language)
+    return image_class(path, language, excel_writer, idx, debug)
 
 
 if __name__ == '__main__':
     # Get arguments
     args = parse_args()
-
+    
     print('*******************************************')
     print('TESSERACT VERSION : {}'.format(pytesseract.get_tesseract_version()))
     print('*******************************************')
 
-    if args.path is None:
+    if args.config is None:
         print('Error: You must give a path to a document. Use python ocr_cezam.py -h for more information.')
 
     set_locale(args.lang)
-
-    # Get image class
-    image = get_image(args.path, args.type, args.lang)
-
-    # Process image (create folder, separate pdf pages to different images, process images)
-    image.processing()
+        
+    config = get_json_from_file(args.config)
+    excel_path = config["name"] + '.xlsx'
+    excel_writer = pd.ExcelWriter(excel_path, engine='xlsxwriter')
     
-    # Extract image information
-    print('PDF path : {}'.format(image.file_path))
-    print('Processed path : {}'.format(image.processed_file_path))
-    image.extract_text(save_file=True)
-    image.parse_fields()
-    print('Bank info :')
-    print('Name : {}'.format(image.bank_name))
-    print('Address : {}'.format(image.agency_address))
-    print('Phone : {}'.format(image.agency_phone))
-    print('Email : {}'.format(image.agency_email))
-
-    print('Client info :')
-    print('First name : {}'.format(image.first_name))
-    print('Last name : {}'.format(image.last_name))
-    print('Address : {}'.format(image.address))
-    print('Month : {}'.format(image.statement_month))
-    print('Year : {}'.format(image.statement_year))
-
-    print('Relevé :')
-    print(image.statement_row)
-    # print('TEXT :\n {}'.format(image.file_text_data['text']))
-    # print('TEXT :\n {}'.format(image.file_text_data))
+    for i, acc_stat in enumerate(config["account_statements"]):
+        print('Processing account statement {}...'.format(i))
+        # Get image class
+        image = get_image(acc_stat, "account_statements", args.lang, excel_writer, i, True)
+        # Process image (create folder, separate pdf pages to different images, process images)
+        image.processing()
+        # image.extract_text(save_file=True)
+        image.parse_fields()
+        
+    for i, tax_notice in enumerate(config["tax_notices"]):
+        print('Processing tax notice {}...'.format(i))
+        # Get image class
+        image = get_image(tax_notice, "tax_notices", args.lang, excel_writer, idx=i, debug=True)
+        # Process image (create folder, separate pdf pages to different images, process images)
+        image.processing()
+        # image.extract_text(save_file=True)
+        image.parse_fields()
+    
+    excel_writer.save()

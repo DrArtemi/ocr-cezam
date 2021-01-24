@@ -1,4 +1,5 @@
 {
-    "address": ["rue", "avenue", "ave", "route"],
-    "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."]
+    "address": ["rue", "avenue", "ave", "route", "boulevard"],
+    "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."],
+    "person_id": ["m", "m.", "mme", "mme."]
 }
