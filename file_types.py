@@ -1,15 +1,8 @@
 from utils.process_fields import get_agency_information, get_bank_id, get_client_information, get_date
-import pytesseract
-import errno
-import csv
 import os
 
 import cv2 as cv
-import numpy as np
 import pandas as pd
-
-from PIL import Image
-from pytesseract.pytesseract import Output
 
 from utils.process_table import process_tables
 from utils.deskew_image import deskew_img
@@ -221,6 +214,7 @@ class TaxNotice:
             return
         
         # #* Process fields
+        #TODO Process tax notice fields
         # print('Processing fields...\r', end='')
         # # Process client information (should be in first page)
         # self.full_name, self.address = get_client_information(

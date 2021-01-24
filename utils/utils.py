@@ -1,16 +1,10 @@
 import os
-import re
 import cv2
 import json
-import math
 import time
-import PyPDF2
-import datetime
-import subprocess
 
 import numpy as np
 
-from skimage import morphology
 from pdf2image import convert_from_path
 
 

@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pytesseract.pytesseract import Output
-from utils.utils import flatten, process_text, remove_background
+from utils.utils import flatten, process_text
 
 
 def sort_contours(cnts, method="left-to-right"):

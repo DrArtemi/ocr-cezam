@@ -52,11 +52,6 @@ if __name__ == '__main__':
     # Get arguments
     args = parse_args()
     
-    #TODO Pourvoir passer un fichier de config :
-    #TODO   - Liste des relevés de comptes (1 sheet/doc avec la date)
-    #TODO   - Liste des avis d'imposition
-    #TODO   - Liste des documents d'identité
-
     print('*******************************************')
     print('TESSERACT VERSION : {}'.format(pytesseract.get_tesseract_version()))
     print('*******************************************')
