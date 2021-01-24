@@ -106,14 +106,10 @@ def remove_background(img, kernel=(5, 5)):
     dilation = cv2.dilate(resizing, kernel,iterations=1)
     erosion = cv2.erode(dilation, kernel,iterations=1)
     #* Image cleaning
-    # if debug_cells is not None:
-    # cv2.imwrite('test_bf.jpg', erosion)
     # Close small dots
     clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))
     # Resharpen our text by making binary img
-    cleaned = cv2.threshold(clean_dots, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    # if debug_cells is not None:
-    # cv2.imwrite('test_af.jpg', cleaned)
+    cleaned = cv2.threshold(clean_dots, 170, 255, cv2.THRESH_BINARY)[1]
     return cleaned
 
 

@@ -7,17 +7,23 @@ def calc_angle(img):
 
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    
     largest_contour = contours[0]
+    
+    image = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    image = cv2.rectangle(image, (x,y), (x+w,y+h), (255, 0, 0), 2)
+    cv2.imwrite("contour.jpg", image)
     
     rect = cv2.minAreaRect(largest_contour)
 
     angle = rect[-1]
-    if angle < -45:
-        angle = 90 + angle
 
-    # * Les images ne devraient pas être décalées de plus de 45°, donc on ne fait rien.
-    if angle > 45 or angle < -45:
-        angle = 0
+    # * Les images ne devraient pas être décalées de plus de 45°.
+    if angle > 45:
+        angle -= 90
+    elif angle < -45:
+        angle += 90
 
     return angle
 
@@ -26,15 +32,10 @@ def rotate_img(img, angle):
     (h, w) = img.shape[:2]
     center = (w // 2, h // 2)
     matrix = cv2.getRotationMatrix2D(center, angle, 1)
-
     img = cv2.warpAffine(img, matrix, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     return img
 
 
 def deskew_img(img):
     angle = calc_angle(img)
-    
-    # On ne rotationne pas l'image si l'angle est trop faible pour gagner du temps.
-    if -0.1 < angle < 0.1:
-        return img
     return rotate_img(img, angle)

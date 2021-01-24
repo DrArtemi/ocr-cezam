@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pytesseract.pytesseract import Output
-from utils.utils import flatten, process_text
+from utils.utils import flatten, process_text, remove_background
 
 
 def sort_contours(cnts, method="left-to-right"):
@@ -54,12 +54,15 @@ def remove_overlapping_tables(tables):
         if len(new_tables) == 0:
             new_tables.append(table2)
         else:
+            check = True
             for table1 in new_tables:
-                if not (table2[0] + table2[2] <= table1[0] + table1[2] and\
-                        table2[0] >= table1[0] and\
-                        table2[1] >= table1[1] and\
-                        table2[1] + table2[3] <= table1[1] + table1[3]):
-                    new_tables.append(table2)
+                if (table2[0] + table2[2] <= table1[0] + table1[2] and\
+                    table2[0] >= table1[0] and\
+                    table2[1] >= table1[1] and\
+                    table2[1] + table2[3] <= table1[1] + table1[3]):
+                   check = False 
+            if check:
+                new_tables.append(table2)
     return new_tables
     
 
@@ -84,13 +87,14 @@ def store_boxes_to_tables(tables, boxes):
             if tx < x < tx + tw and tx < x + w < tx + tw and\
                 ty < y < ty + th and ty < y + h < ty + th:
                 table_boxes[-1].append(b)
+        table_boxes[-1].sort(key = lambda x: x[1])
     return table_boxes
 
 
 def tables_to_row_col_tables(tables):
     tables_r_c = []
     previous = None
-    row_thresh = 20
+    row_thresh = 15
     for table in tables:
         row = []
         tables_r_c.append([])
@@ -132,7 +136,7 @@ def arrange_tables(tables, tables_max_col, tables_centers):
     for i, table in enumerate(tables):
         tables_arranged.append([])
         for j, row in enumerate(table):
-            l = [[]] * tables_max_col[i]
+            l = [[] for _ in range(tables_max_col[i])]
             for col in row:
                 diff = abs(tables_centers[i] - (col[0] + col[2] / 4))
                 min_dist = min(diff)
@@ -150,14 +154,16 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
             os.makedirs(debug_cells)
     tables_content = []
     tables_bb = []
+    tags = ['débit', 'crédit', 'debit', 'credit']
     for i, table in enumerate(tables):
         tables_content.append([])
         tables_bb.append([])
+        tagged_columns = []
         for r, row in enumerate(table):
             tables_content[-1].append([])
             tables_bb[-1].append([])
             for c, col in enumerate(row):
-                text = []
+                text = [] if arrange_mode == 1 else ' '
                 used_bb = []
                 if len(col) > 0:
                     y, x, w, h = col
@@ -174,22 +180,45 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
                     # Close small dots
                     clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))
                     # Resharpen our text by making binary img
-                    cleaned = cv2.threshold(clean_dots, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+                    cleaned = cv2.threshold(clean_dots, 170, 255, cv2.THRESH_BINARY)[1]
                     if debug_cells is not None:
                         cv2.imwrite(os.path.join(debug_cells, 'test_{}_{}_af.jpg'.format(r, c)), cleaned)
                     if arrange_mode == 0:
-                    # --psm 4 pour assumer ma cellule comme un seul bloc.
+                        # --psm 4 pour assumer ma cellule comme un seul bloc.
                         text = pytesseract.image_to_string(cleaned, config='--psm 4', lang='fra')
                         if len(text) == 0:
                             text = pytesseract.image_to_string(cleaned, config='--psm 3', lang='fra')
+                        text = re.sub('\x0c',  '', text)
                     else:
                         text_data = pytesseract.image_to_data(cleaned, output_type=Output.DICT, config='--psm 4', lang='fra')
                         text, conf, bb = process_text(text_data)
                         used_bb = []
-                        for i in range(len(text)):
-                            text[i] = ' '.join(text[i])
-                            text[i] = re.sub('\x0c',  '', text[i])
-                            used_bb.append(bb[i][0][1])
+                        for j in range(len(text)):
+                            # Determine if column is credit/debit
+                            is_num = True
+                            for tag in tags:
+                                for word in text[j]:
+                                    if tag == word.lower():
+                                        is_num = False
+                                        tagged_columns.append(c)
+                            text[j] = ' '.join(text[j])
+                            text[j] = re.sub('\x0c',  '', text[j])
+                            # If column is credit/debit and cell is number, treat again cell
+                            if c in tagged_columns and is_num:
+                                x1, y1, w1, h1 = bb[j][0]
+                                x2, y2, w2, h2 = bb[j][-1]
+                                cutted_img = cleaned[y1:y1+h1, x1:x2+w2]
+                                cutted_img = 255 - cutted_img
+                                cutted_border = cv2.copyMakeBorder(cutted_img, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[0,0])
+                                cutted_resizing = cv2.resize(cutted_border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                                # cv2.imwrite('table_recognition/test_{}_{}_{}_bf.jpg'.format(r, c, j), cutted_resizing)
+                                txt = pytesseract.image_to_string(cutted_resizing, config='--psm 7 -c tessedit_char_whitelist=0123456789', lang='eng')
+                                txt = txt.replace(' ', '').replace('\n', '').replace('\x0c', '')
+                                # txt = re.sub('\n\x0c',  '', txt)
+                                if len(txt) > 2:
+                                    txt = txt[:-2] + ',' + txt[-2:]
+                                text[j] = txt
+                            used_bb.append(bb[j][0][1])
                     
                 tables_content[-1][-1].append(text) 
                 tables_bb[-1][-1].append(used_bb)
@@ -199,7 +228,7 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
 def prepare_tables_for_df(tables, tables_bb):
     prepared_tables = []
     for t in range(len(tables)):
-        threshold = 20
+        threshold = 15
         nb_cols = len(tables[t][0])
         final_tab = []
         for i, row in enumerate(tables[t]):
@@ -235,7 +264,7 @@ def draw_table_detection_bb(img, tables_boxes, tables, debug_folder):
     cv2.imwrite(os.path.join(debug_folder, "table_detection.jpg"), image)
     
 
-def process_tables(file_path, debug_folder=None, arrange_mode=0):
+def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=False):
     if debug_folder is not None:
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
@@ -244,9 +273,9 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     if img is None:
         print('Process table : error while trying to load {}'.format(file_path))
         return []
-    
+
     # thresholding the image to a binary image (only 0 or 255)
-    _, img_bin = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    _, img_bin = cv2.threshold(img, 170, 255, cv2.THRESH_BINARY)
     
     # Invert image (text become white, background black)
     img_bin = 255 - img_bin
@@ -266,14 +295,15 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     
     # Use vertical kernel to detect and save the vertical lines in a jpg
     image_1 = cv2.erode(img_bin, ver_kernel, iterations=3)
-    vertical_lines = cv2.dilate(image_1, ver_kernel, iterations=3)
-    # If debug folder is not None, draw vertical lines image
-    if debug_folder is not None:
-        cv2.imwrite(os.path.join(debug_folder, "vertical.jpg"), vertical_lines)
+    vertical_lines = cv2.dilate(image_1, ver_kernel, iterations=4)
     
     # Use horizontal kernel to detect and save the horizontal lines in a jpg
     image_2 = cv2.erode(img_bin, hor_kernel, iterations=3)
-    horizontal_lines = cv2.dilate(image_2, hor_kernel, iterations=3)
+    horizontal_lines = cv2.dilate(image_2, hor_kernel, iterations=4)
+    
+    # If debug folder is not None, draw vertical lines image
+    if debug_folder is not None:
+        cv2.imwrite(os.path.join(debug_folder, "vertical.jpg"), vertical_lines)
     # If debug folder is not None, draw horizontal lines image
     if debug_folder is not None:
         cv2.imwrite(os.path.join(debug_folder, "horizontal.jpg"), horizontal_lines)
@@ -283,6 +313,23 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     # Eroding and thesholding the image
     img_vh = cv2.erode(~img_vh, kernel, iterations=2)
     _, img_vh = cv2.threshold(img_vh, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    
+    # This part is used in case of open table
+    if semiopen_table:
+        # Detect contours for following box detection
+        contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)    
+        
+        min_x, min_y = img.shape[1], img.shape[0]
+        max_x = max_y = 0
+        
+        for contour in contours:
+            (x,y,w,h) = cv2.boundingRect(contour)
+            if x > 0 and y > 0 and x+w < img.shape[1] and y+h < img.shape[0]:
+                min_x, max_x = min(x, min_x), max(x+w, max_x)
+                min_y, max_y = min(y, min_y), max(y+h, max_y)
+        if max_x - min_x > 0 and max_y - min_y > 0:
+            cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 2)
+    
     # If debug folder is not None, draw horizontal and vertical lines merges in 1 image
     if debug_folder is not None:
         cv2.imwrite(os.path.join(debug_folder, "img_vh.jpg"), img_vh)
@@ -295,8 +342,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
         cv2.imwrite(os.path.join(debug_folder, "bitnot.jpg"), bitnot)
     
     # Detect contours for following box detection
-    contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    
+    contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)    
     # Sort all the contours by top to bottom.
     contours, boundingBoxes = sort_contours(contours, method="top-to-bottom")
     
@@ -309,13 +355,15 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
         #! Not genric at ALL, would be better to find another method !
         # A cell can't be more than 80% of the image
         if w < img.shape[1] * 0.8:
-            boxes.append([x,y,w,h])
+            boxes.append([x, y, w, h])
         # If it is, we process it as a table
         elif w < img.shape[1] or h < img.shape[0]:
             tables.append([x, y, w, h])
 
     # Remove overlaping tables
     tables = remove_overlapping_tables(tables)
+    # Remove overlaping boxes
+    boxes = remove_overlapping_tables(boxes)
     # Store boxes into their respective table
     tables_boxes = store_boxes_to_tables(tables, boxes)
         
@@ -333,7 +381,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     
     # For each table, create a list of rows in a list of columns
     tables_r_c = tables_to_row_col_tables(tables_boxes)
-
+    
     # calculating maximum number of cells, and get center of each column
     tables_max_col, tables_centers = get_tables_columns_info(tables_r_c)
     
@@ -354,7 +402,13 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0):
     tables_dataframe = []
     for table_content in tables_content:
         # We create a dataframe for each table with the first row being the columns names
-        tables_dataframe.append(pd.DataFrame(np.array(table_content[1:]), columns=table_content[0]))
+        if len(table_content) > 1:
+            columns = table_content[0]
+            for i in range(len(columns)):
+                columns[i] = '{} - {}'.format(i, columns[i])
+            tables_dataframe.append(pd.DataFrame(np.array(table_content[1:]), columns=table_content[0]))
+        else:
+            tables_dataframe.append(pd.DataFrame(np.array(table_content)))
     
     return tables_dataframe
     
