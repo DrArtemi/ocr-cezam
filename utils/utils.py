@@ -121,35 +121,34 @@ def timing(f):
 def valid_value(val, dates):
     if val == '':
         return False
-    return len([d for d in dates if d != '']) > 0
+    return len([d for d in dates if d != '' and 'solde' not in d.lower()]) > 0
 
 
 def check_solde(tables, dicts):
     cred_regx = '|'.join(dicts['credit'])
     deb_regx = '|'.join(dicts['debit'])
-    date_regx = 'date|DATE'
+    date_regx = 'date'
     solde_regx = 'solde'
     status = [None] * len(tables)
     for i, table in enumerate(tables):
-        #TODO Get la 1ère valeur de solde et le type
-        #TODO Get la dernière valeur de solde et le type
-        #TODO comparer les trucs
-        
+        table.columns = table.columns.str.strip().str.lower()
         #* Get credit and debit column names
         cred_col = table.filter(regex=cred_regx)
         deb_col = table.filter(regex=deb_regx)
         date_col = table.filter(regex=date_regx)
         
-        if cred_col.empty or deb_col.empty or date_col.empty:
-            status[i] = { 'Unknown': 'Credit, debit or date column not found' }
+        col_empty = [cred_col.empty, deb_col.empty, date_col.empty]
+        if any(col_empty):
+            col_names = ['credit', 'debit', 'date']
+            missing_col = [col for j, col in enumerate(col_names) if col_empty[j]]
+            status[i] = { 'Unknown': 'columns missing : {}'.format(', '.join(missing_col)) }
             continue
         cred_col_name = list(cred_col.columns)
         deb_col_name = list(deb_col.columns)
         date_col_name = list(date_col.columns)
-        
+                
         #* Get solde values
-        other_names = [name for name in table.columns if name not in cred_col_name + deb_col_name + date_col_name]
-        other_soldes = [table[other_name].str.contains(solde_regx, case=False, na=False) for other_name in other_names]
+        other_soldes = [table[other_name].str.contains(solde_regx, case=False, na=False) for other_name in table.columns]
         other_solde = other_soldes[0]
         for j in range(1, len(other_soldes)):
             other_solde |= other_soldes[j]
@@ -170,13 +169,12 @@ def check_solde(tables, dicts):
         #* Get credit and debit values
         cred_names = cred_col_name + date_col_name
         cred_values = [float(row[0].replace(',', '.'))\
-            for row in sub_table[cred_names].to_numpy() if valid_value(row[0], row[1:-1])]
+            for row in sub_table[cred_names].to_numpy() if valid_value(row[0], row[1:])]
         cred_val = sum(cred_values)
         deb_names = deb_col_name + date_col_name
         deb_values = [float(row[0].replace(',', '.'))\
-            for row in sub_table[deb_names].to_numpy() if valid_value(row[0], row[1:-1])]
+            for row in sub_table[deb_names].to_numpy() if valid_value(row[0], row[1:])]
         deb_val = sum(deb_values)
-        
         #* Calc solde final value with table values
         res = round(float(first_val[0]) + (deb_val - cred_val if check_col_n == 'debit' else cred_val - deb_val), 2)
         

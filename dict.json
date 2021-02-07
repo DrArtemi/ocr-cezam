@@ -2,6 +2,6 @@
     "address": ["rue", "avenue", "ave", "route", "boulevard"],
     "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."],
     "person_id": ["m", "m.", "mme", "mme."],
-    "credit": ["CREDIT", "CRÉDIT", "credit", "crédit", "cred", "créd"],
-    "debit": ["DEBIT", "DÉBIT", "debit", "débit", "deb", "déb"]
+    "credit": ["credit", "crédit", "cred", "créd"],
+    "debit": ["debit", "débit", "deb", "déb"]
 }
