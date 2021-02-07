@@ -1,11 +1,14 @@
+from file_types.tableau_amortissement import TableauAmortissement
+from file_types.document_identite import DocumentIdentite
+from file_types.bilan import Bilan
+from file_types.avis_imposition import AvisImposition
+from file_types.releve_banquaire import ReleveBanquaire
 import locale
 import argparse
 from utils.utils import get_json_from_file
 import pytesseract
 
 import pandas as pd
-
-from file_types import IdentityDocument, TaxNotice, AccountStatements
 
 
 def parse_args():
@@ -26,26 +29,16 @@ def set_locale(language):
     locale.setlocale(locale.LC_ALL, lang_tab[language])
 
 
-def account_statements(path, language, excel_writer, idx, debug):
-    return AccountStatements(path, language, excel_writer, idx=idx, debug=debug)
-
-
-def tax_notice(path, language, excel_writer, idx, debug):
-    return TaxNotice(path, language, excel_writer, idx=idx, debug=debug)
-
-
-def identity_document(path, language):
-    return IdentityDocument(path, language=language)
-
-
 def get_image(path, doc_type, language, excel_writer, idx, debug):
     switcher = {
-        "account_statements": account_statements,
-        "tax_notices": tax_notice,
-        "identity_documents": identity_document
+        "releve_banquaire": ReleveBanquaire,
+        "avis_imposition": AvisImposition,
+        "bilan": Bilan,
+        "document_identite": DocumentIdentite,
+        "tableau_amortissement": TableauAmortissement
     }
     image_class = switcher.get(doc_type)
-    return image_class(path, language, excel_writer, idx, debug)
+    return image_class(path, language, excel_writer, idx=idx, debug=debug)
 
 
 if __name__ == '__main__':
@@ -62,25 +55,21 @@ if __name__ == '__main__':
     set_locale(args.lang)
         
     config = get_json_from_file(args.config)
-    excel_path = config["name"] + '.xlsx'
+    excel_path = config['name'] + '.xlsx'
     excel_writer = pd.ExcelWriter(excel_path, engine='xlsxwriter')
     
-    for i, acc_stat in enumerate(config["account_statements"]):
-        print('Processing account statement {}...'.format(i))
-        # Get image class
-        image = get_image(acc_stat, "account_statements", args.lang, excel_writer, i, True)
-        # Process image (create folder, separate pdf pages to different images, process images)
-        image.processing()
-        # image.extract_text(save_file=True)
-        image.parse_fields()
-        
-    for i, tax_notice in enumerate(config["tax_notices"]):
-        print('Processing tax notice {}...'.format(i))
-        # Get image class
-        image = get_image(tax_notice, "tax_notices", args.lang, excel_writer, idx=i, debug=True)
-        # Process image (create folder, separate pdf pages to different images, process images)
-        image.processing()
-        # image.extract_text(save_file=True)
-        image.parse_fields()
-    
-    excel_writer.save()
+    for document_type in config['documents']:
+        for i, document in enumerate(config['documents'][document_type]):
+            print('Processing document_type {}...'.format(i))
+            # Get image class
+            image = get_image(document, "account_statements", args.lang, excel_writer, i, True)
+            # Process image (create folder, separate pdf pages to different images, process images)
+            if not image.processing():
+                print('Error while trying to process {}, moving on to the next document'.format(document))
+                continue
+            # image.extract_text(save_file=True)
+            if not image.parse_fields():
+            # Save Excel Writer
+                print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
+                continue
+            excel_writer.save()
