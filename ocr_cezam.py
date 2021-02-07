@@ -60,9 +60,9 @@ if __name__ == '__main__':
     
     for document_type in config['documents']:
         for i, document in enumerate(config['documents'][document_type]):
-            print('Processing document_type {}...'.format(i))
+            print('Processing {} {}...'.format(document_type, i))
             # Get image class
-            image = get_image(document, "account_statements", args.lang, excel_writer, i, True)
+            image = get_image(document, document_type, args.lang, excel_writer, i, True)
             # Process image (create folder, separate pdf pages to different images, process images)
             if not image.processing():
                 print('Error while trying to process {}, moving on to the next document'.format(document))
@@ -72,4 +72,4 @@ if __name__ == '__main__':
             # Save Excel Writer
                 print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
                 continue
-            excel_writer.save()
+    excel_writer.save()

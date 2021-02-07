@@ -30,7 +30,7 @@ class ReleveBanquaire(FileType):
     
     def processing(self):
         extension = self.file_path.split('.')[-1]
-        if extension is 'pdf':
+        if extension == 'pdf':
             paths = pdf_to_jpg(self.file_path, self.folder_path)
         elif extension in ['jpg', 'jpeg']:
             paths = [self.file_path]
@@ -148,6 +148,7 @@ class ReleveBanquaire(FileType):
         print('Processing tables... [DONE]')
         return True
     
+    @staticmethod
     def valid_value(val, dates):
         if val == '':
             return False
