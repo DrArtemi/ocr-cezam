@@ -13,7 +13,6 @@ def calc_angle(img):
     image = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     x, y, w, h = cv2.boundingRect(largest_contour)
     image = cv2.rectangle(image, (x,y), (x+w,y+h), (255, 0, 0), 2)
-    cv2.imwrite("contour.jpg", image)
     
     rect = cv2.minAreaRect(largest_contour)
 
