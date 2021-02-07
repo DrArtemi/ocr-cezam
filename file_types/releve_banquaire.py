@@ -1,5 +1,3 @@
-
-
 import os
 import cv2
 import pandas as pd
@@ -8,6 +6,9 @@ from utils.process_table import process_tables
 from utils.utils import get_json_from_file, pdf_to_jpg, save_cv_image
 from utils.process_fields import get_agency_information, get_bank_id, get_client_information, get_date
 from file_types.file_type import FileType
+
+
+#TODO Améliorer les résultats
 
 
 class ReleveBanquaire(FileType):

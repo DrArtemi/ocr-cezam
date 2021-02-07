@@ -1,6 +1,0 @@
-{
-    "python.pythonPath": "/home/adrien/miniconda3/envs/ocr/bin/python",
-    "python.linting.enabled": false,
-    "python.linting.pylintEnabled": true,
-    "python.linting.banditEnabled": false
-}

@@ -1,6 +1,9 @@
 from file_types.file_type import FileType
 
 
+#TODO Implémenter le document d'identité
+
+
 class DocumentIdentite(FileType):
     
     def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
