@@ -1,5 +1,7 @@
 {
     "address": ["rue", "avenue", "ave", "route", "boulevard"],
     "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."],
-    "person_id": ["m", "m.", "mme", "mme."]
+    "person_id": ["m", "m.", "mme", "mme."],
+    "credit": ["CREDIT", "CRÉDIT", "credit", "crédit", "cred", "créd"],
+    "debit": ["DEBIT", "DÉBIT", "debit", "débit", "deb", "déb"]
 }

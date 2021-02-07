@@ -153,8 +153,12 @@ class AccountStatements(TesseractDoc):
                         else pd.concat([self.statement_tables[i], df], ignore_index=True)
 
         self.statement_tables.sort(key = lambda df: len(df.index), reverse=True)
+        tables_status = check_solde(self.statement_tables, self.dicts)
         # Save tables to excel files
         for i, df in enumerate(self.statement_tables):
+            status_df = pd.DataFrame.from_dict(tables_status[i], orient='index', columns=['Description'])
+            status_df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
+            self.row += 2
             df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
             self.row += len(df.index) + 2
         print('Processing tables... [DONE]')
