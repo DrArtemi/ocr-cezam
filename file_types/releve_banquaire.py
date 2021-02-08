@@ -92,7 +92,7 @@ class ReleveBanquaire(FileType):
         self.information["Client full name"],\
         self.information["Client address"] = get_client_information(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             self.dicts,
             os.path.join(debug_folder, 'client_info.jpg') if self.debug else None
         )
@@ -101,13 +101,13 @@ class ReleveBanquaire(FileType):
         self.information["Agency phone"],\
         self.information["Agency address"] = get_agency_information(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             self.dicts,
             os.path.join(debug_folder, 'agency_info.jpg') if self.debug else None
         )
         self.information["Date"] = get_date(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
         )
         self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
