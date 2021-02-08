@@ -318,17 +318,19 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     if semiopen_table:
         # Detect contours for following box detection
         contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)    
+        contours, boundingBoxes = sort_contours(contours, method="top-to-bottom")
         
         min_x, min_y = img.shape[1], img.shape[0]
         max_x = max_y = 0
         
         for contour in contours:
             (x,y,w,h) = cv2.boundingRect(contour)
+            
             if x > 0 and y > 0 and x+w < img.shape[1] and y+h < img.shape[0]:
-                min_x, max_x = min(x, min_x), max(x+w, max_x)
-                min_y, max_y = min(y, min_y), max(y+h, max_y)
+                min_x, min_y, max_x, max_y = x, y, x+w, y+h
+                break
         if max_x - min_x > 0 and max_y - min_y > 0:
-            cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 2)
+            cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 5)
     
     # If debug folder is not None, draw horizontal and vertical lines merges in 1 image
     if debug_folder is not None:
@@ -354,7 +356,8 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         x, y, w, h = cv2.boundingRect(c)
         #! Not genric at ALL, would be better to find another method !
         # A cell can't be more than 80% of the image
-        if w < img.shape[1] * 0.8:
+        # and it's width and height must be above a threshold (15)
+        if w < img.shape[1] * 0.8 and w > 15 and h > 15:
             boxes.append([x, y, w, h])
         # If it is, we process it as a table
         elif w < img.shape[1] or h < img.shape[0]:

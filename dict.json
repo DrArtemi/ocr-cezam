@@ -3,5 +3,6 @@
     "phone": ["tel", "tel:", "tél", "tél:", "tél.:", "tél.", "tel.:", "tel."],
     "person_id": ["m", "m.", "mme", "mme."],
     "credit": ["credit", "crédit", "cred", "créd"],
-    "debit": ["debit", "débit", "deb", "déb"]
+    "debit": ["debit", "débit", "deb", "déb"],
+    "avis_imposition": ["avis d'impot", "avis d'impôt"]
 }

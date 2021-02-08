@@ -2,12 +2,19 @@
     "name": "thomas_schmitt",
     "documents": {
         "releve_banquaire": [
-            "/media/adrien/Shared/Work/Cezam/documents/OCR/Relevés bancaires/Relevés_Thomas Schmitt.pdf",
-            "/media/adrien/Shared/Work/Cezam/documents/OCR/pdf_examples/compte joint_BANQUE POP_012017_bis.pdf"
+            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/releve_banquaire/compte joint_BANQUE POP_012017_bis.pdf"
         ],
-        "avis_imposition": [],
-        "bilan": [],
-        "document_identite": [],
-        "tableau_amortissement": []
+        "avis_imposition": [
+            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/avis_imposition/IRPP_2014.pdf"
+        ],
+        "bilan": [
+            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/bilan/001-001-Plaquette SCI BM LAURILL 31-12-2017.pdf"
+        ],
+        "document_identite": [
+            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/document_identite/CNI_AB.pdf"
+        ],
+        "tableau_amortissement": [
+            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/tableau_amortissement/ASO_TA_1.pdf"
+        ]
     }
 }

@@ -1,8 +1,0 @@
-{
-    "name": "Crédit Agricole",
-    "bank_info": [ [0.0, 0.2], [0.0, 0.3] ],
-    "client_info": [ [0.5, 1.0], [0.0, 0.3] ],
-    "date_info": [ [0.5, 1.0], [0.0, 0.2] ],
-    "table_info": [ [0.0, 1.0], [0.0, 1.0] ],
-    "date_format": "%d %B %Y"
-}

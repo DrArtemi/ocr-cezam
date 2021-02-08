@@ -58,7 +58,19 @@ if __name__ == '__main__':
     excel_path = config['name'] + '.xlsx'
     excel_writer = pd.ExcelWriter(excel_path, engine='xlsxwriter')
     
+    #! Remove this when tests are finished
+    pass_doc = [
+        'releve_banquaire',
+        # 'avis_imposition',
+        'bilan',
+        'document_identite',
+        'tableau_amortissement'
+    ]
+    
     for document_type in config['documents']:
+        #! Remove this when tests are finished
+        if document_type in pass_doc:
+            continue
         for i, document in enumerate(config['documents'][document_type]):
             print('Processing {} {}...'.format(document_type, i))
             # Get image class
@@ -72,4 +84,6 @@ if __name__ == '__main__':
             # Save Excel Writer
                 print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
                 continue
-    excel_writer.save()
+    #! Remove this when tests are finished
+    if len(pass_doc) < 5:
+        excel_writer.save()
