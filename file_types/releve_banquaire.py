@@ -63,7 +63,7 @@ class ReleveBanquaire(FileType):
 
     def parse_fields(self):
         
-        debug_folder = os.path.join(self.folder_path, 'debug')
+        debug_folder = os.path.join(self.folder_path, 'rb_debug')
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
         
@@ -110,7 +110,8 @@ class ReleveBanquaire(FileType):
             self.bank_utils["releve_banquaire"],
             os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
         )
-        self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
+        if self.information["Date"] != 'N/A':
+            self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
         
         infos_df = pd.DataFrame.from_dict(self.information, orient='index')
         infos_df.to_excel(self.excel_writer,

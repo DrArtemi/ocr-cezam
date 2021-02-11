@@ -11,7 +11,7 @@ from utils.utils import get_json_from_file, pdf_to_jpg, process_text, remove_bac
 
 from file_types.file_type import FileType
 
-#TODO Implémenter l'avis d'imposition
+#TODO Améliorer les résultats
 
 
 class AvisImposition(FileType):
@@ -19,7 +19,6 @@ class AvisImposition(FileType):
     def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
         super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
         
-        # Bank infos
         self.information = {
             "Client full name": "N/A",
             "Client address": "N/A",
@@ -58,7 +57,7 @@ class AvisImposition(FileType):
     
     def parse_fields(self):
         
-        debug_folder = os.path.join(self.folder_path, 'debug')
+        debug_folder = os.path.join(self.folder_path, 'ai_debug')
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
         

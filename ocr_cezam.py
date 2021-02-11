@@ -61,10 +61,10 @@ if __name__ == '__main__':
     #! Remove this when tests are finished
     pass_doc = [
         'releve_banquaire',
-        # 'avis_imposition',
+        'avis_imposition',
         'bilan',
         'document_identite',
-        'tableau_amortissement'
+        # 'tableau_amortissement'
     ]
     
     for document_type in config['documents']:
