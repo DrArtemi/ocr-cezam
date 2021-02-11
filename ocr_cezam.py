@@ -63,8 +63,8 @@ if __name__ == '__main__':
         'releve_banquaire',
         'avis_imposition',
         'bilan',
-        'document_identite',
-        # 'tableau_amortissement'
+        # 'document_identite',
+        'tableau_amortissement'
     ]
     
     for document_type in config['documents']:
