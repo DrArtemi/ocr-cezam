@@ -1,20 +1,25 @@
 {
-    "name": "thomas_schmitt",
-    "documents": {
-        "releve_banquaire": [
-            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/releve_banquaire/compte joint_BANQUE POP_012017_bis.pdf"
-        ],
-        "avis_imposition": [
-            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/avis_imposition/IRPP_2014.pdf"
-        ],
-        "bilan": [
-            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/bilan/001-001-Plaquette SCI BM LAURILL 31-12-2017.pdf"
-        ],
-        "document_identite": [
-            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/document_identite/CNI_AB.pdf"
-        ],
-        "tableau_amortissement": [
-            "/media/adrien/Shared/Work/Cezam/documents/easy_examples/tableau_amortissement/ASO_TA_1.pdf"
-        ]
-    }
+    "releveBanquaire": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/releve_banquaire/compte joint_BANQUE POP_012017_bis.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/releve_banquaire/Perso_RelevéCIC_Cpte_M Coulomb_Dec2017.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/releve_banquaire/Relevé_LCL_Mai 2018_M Hardel.pdf"
+    ],
+    "avisImposition": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/avis_imposition/IRPP_2014.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/avis_imposition/IRPP_2017_lb.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/avis_imposition/JD Kuron_IRPP 2018.pdf"
+    ],
+    "liasseFiscale": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/bilan/SPADA - Comptes annuels et liasse fiscale 30 04 2020.PDF"
+    ],
+    "documentIdentite": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/CNI_AB.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/CNI_M Hardel.jpg",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/IDENTITE P.DE-CRESCENZO.pdf"
+    ],
+    "tableauAmortissement": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/ASO_TA_1.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/Prêt Caisse d'Epargne réactualisé - SCI Villa Thaïs - 200 000,00 €.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/Tableaux amortissement prêt perso.pdf"
+    ]
 }

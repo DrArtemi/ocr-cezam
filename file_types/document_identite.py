@@ -5,10 +5,7 @@ import pandas as pd
 import pytesseract
 from pytesseract.pytesseract import Output
 from utils.deskew_image import deskew_img
-from utils.process_fields import (get_agency_information, get_bank_id,
-                                  get_client_information, get_date)
-from utils.process_table import process_tables
-from utils.utils import get_json_from_file, pdf_to_jpg, process_text, remove_background, save_cv_image
+from utils.utils import pdf_to_jpg, process_text, remove_background, save_cv_image
 
 from file_types.file_type import FileType
 
@@ -16,8 +13,8 @@ from file_types.file_type import FileType
 
 class DocumentIdentite(FileType):
     
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
-        super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
+        super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         # Bank infos
         self.information = {

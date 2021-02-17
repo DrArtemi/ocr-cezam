@@ -15,8 +15,8 @@ from file_types.file_type import FileType
 
 class ReleveBanquaire(FileType):
     
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
-        super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
+        super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         # Bank infos
         self.information = {
@@ -39,6 +39,9 @@ class ReleveBanquaire(FileType):
             paths = [self.file_path]
         else:
             print('Error: {} is not a valid PDF or JPG file'.format(self.file_path))
+            return False
+
+        if paths is None:
             return False
 
         for path in paths:
@@ -156,6 +159,10 @@ class ReleveBanquaire(FileType):
     def valid_value(val, dates):
         if val == '':
             return False
+        try:
+            a = float(val.replace(',', '.'))
+        except:
+            return False
         return len([d for d in dates if d != '' and 'solde' not in d.lower()]) > 0
     
     def check_solde(self):
@@ -211,7 +218,7 @@ class ReleveBanquaire(FileType):
             deb_val = sum(deb_values)
             #* Calc solde final value with table values
             res = round(float(first_val[0]) + (deb_val - cred_val if check_col_n == 'debit' else cred_val - deb_val), 2)
-            
+                        
             #* Set status depending on calculated solde value matching real final solde value
             if res == float(last_val[0]):
                 status[i] = { 'Success': 'Table values match final solde value.' }

@@ -16,8 +16,8 @@ from file_types.file_type import FileType
 
 class AvisImposition(FileType):
     
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
-        super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
+        super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         self.information = {
             "Client full name": "N/A",

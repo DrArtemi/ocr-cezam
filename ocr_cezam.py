@@ -16,6 +16,7 @@ def parse_args():
 
     parser.add_argument("-config", type=str, default=None, help="path to document", required=True)
     
+    parser.add_argument("-excel-path", type=str, default='processed.xlsx', help="path where excel will be saved")
     parser.add_argument("-lang", type=str, default='fra', help="document language")
 
     return parser.parse_args()
@@ -31,14 +32,14 @@ def set_locale(language):
 
 def get_image(path, doc_type, language, excel_writer, idx, debug):
     switcher = {
-        "releve_banquaire": ReleveBanquaire,
-        "avis_imposition": AvisImposition,
-        "bilan": Bilan,
-        "document_identite": DocumentIdentite,
-        "tableau_amortissement": TableauAmortissement
+        "releveBanquaire": ReleveBanquaire,
+        "avisImposition": AvisImposition,
+        "liasseFiscale": Bilan,
+        "documentIdentite": DocumentIdentite,
+        "tableauAmortissement": TableauAmortissement
     }
     image_class = switcher.get(doc_type)
-    return image_class(path, language, excel_writer, idx=idx, debug=debug)
+    return image_class(path, doc_type, language, excel_writer, idx=idx, debug=debug)
 
 
 if __name__ == '__main__':
@@ -48,30 +49,29 @@ if __name__ == '__main__':
     print('*******************************************')
     print('TESSERACT VERSION : {}'.format(pytesseract.get_tesseract_version()))
     print('*******************************************')
-
+        
     if args.config is None:
         print('Error: You must give a path to a document. Use python ocr_cezam.py -h for more information.')
 
     set_locale(args.lang)
         
     config = get_json_from_file(args.config)
-    excel_path = config['name'] + '.xlsx'
-    excel_writer = pd.ExcelWriter(excel_path, engine='xlsxwriter')
+    excel_writer = pd.ExcelWriter(args.excel_path, engine='xlsxwriter')
     
     #! Remove this when tests are finished
     pass_doc = [
-        'releve_banquaire',
-        'avis_imposition',
-        'bilan',
-        # 'document_identite',
-        'tableau_amortissement'
+        # 'releveBanquaire',
+        # 'avisImposition',
+        # 'liasseFiscale',
+        # 'documentIdentite',
+        # 'tableauAmortissement'
     ]
     
-    for document_type in config['documents']:
+    for document_type in config:
         #! Remove this when tests are finished
         if document_type in pass_doc:
             continue
-        for i, document in enumerate(config['documents'][document_type]):
+        for i, document in enumerate(config[document_type]):
             print('Processing {} {}...'.format(document_type, i))
             # Get image class
             image = get_image(document, document_type, args.lang, excel_writer, i, True)
@@ -87,3 +87,4 @@ if __name__ == '__main__':
     #! Remove this when tests are finished
     if len(pass_doc) < 5:
         excel_writer.save()
+    print('Processing ended, leaving !')

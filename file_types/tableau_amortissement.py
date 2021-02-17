@@ -13,8 +13,8 @@ from utils.deskew_image import deskew_img
 
 class TableauAmortissement(FileType):
     
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
-        super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
+        super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         self.information = {
             "Bank name": "N/A",
