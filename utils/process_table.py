@@ -109,9 +109,9 @@ def cut_box_from_heights(box, heights, row_thresh):
     return new_boxes
 
 
-def cut_cells_from_tables(tables):
+def cut_cells_from_tables(tables, space_row):
     new_tables = []
-    row_thresh = 15
+    row_thresh = space_row
     for i, table in enumerate(tables):
         new_tables.append([])
         heights = []
@@ -129,10 +129,10 @@ def cut_cells_from_tables(tables):
     return new_tables
 
 
-def tables_to_row_col_tables(tables):
+def tables_to_row_col_tables(tables, space_row):
     tables_r_c = []
     previous = None
-    row_thresh = 15
+    row_thresh = space_row
     for table in tables:
         row = []
         tables_r_c.append([])
@@ -263,10 +263,10 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
     return tables_content, tables_bb
 
 
-def prepare_tables_for_df(tables, tables_bb):
+def prepare_tables_for_df(tables, tables_bb, space_row):
     prepared_tables = []
     for t in range(len(tables)):
-        threshold = 15
+        threshold = space_row
         nb_cols = len(tables[t][0])
         final_tab = []
         for i, row in enumerate(tables[t]):
@@ -302,7 +302,7 @@ def draw_table_detection_bb(img, tables_boxes, tables, debug_folder):
     cv2.imwrite(os.path.join(debug_folder, "table_detection.jpg"), image)
     
 
-def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=False):
+def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=False, space_row=15):
     if debug_folder is not None:
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
@@ -395,7 +395,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         #! Not genric at ALL, would be better to find another method !
         # A cell can't be more than 80% of the image
         # and it's width and height must be above a threshold (15)
-        if w < img.shape[1] * 0.8 and w > 15 and h > 15:
+        if w < img.shape[1] * 0.8 and w > space_row and h > space_row:
             boxes.append([x, y, w, h])
         # If it is, we process it as a table
         elif w < img.shape[1] or h < img.shape[0]:
@@ -421,10 +421,10 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         draw_table_detection_bb(img, tables_boxes, tables, debug_folder)
     
     # For each table, cut cells so they have a similar size
-    cutted_tables_boxes = cut_cells_from_tables(tables_boxes)
+    cutted_tables_boxes = cut_cells_from_tables(tables_boxes, space_row)
     
     # For each table, create a list of rows in a list of columns
-    tables_r_c = tables_to_row_col_tables(cutted_tables_boxes)
+    tables_r_c = tables_to_row_col_tables(cutted_tables_boxes, space_row)
     
     # calculating maximum number of cells, and get center of each column
     tables_max_col, tables_centers = get_tables_columns_info(tables_r_c)
@@ -444,7 +444,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     
     # If mode is 1, we prepare our tables to create dataframes
     if arrange_mode == 1:
-        tables_content = prepare_tables_for_df(tables_content, tables_bb)
+        tables_content = prepare_tables_for_df(tables_content, tables_bb, space_row)
     
     # Creating a dataframe of the generated OCR list
     tables_dataframe = []

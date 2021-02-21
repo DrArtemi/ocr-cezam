@@ -1,16 +1,17 @@
 import os
 
 import cv2
+from numpy.core.fromnumeric import resize
 import pandas as pd
+import pytesseract
+from pytesseract.pytesseract import Output
 from utils.deskew_image import deskew_img
 from utils.process_fields import (get_agency_information, get_bank_id,
                                   get_client_information, get_date)
 from utils.process_table import process_tables
-from utils.utils import get_json_from_file, pdf_to_jpg, save_cv_image
+from utils.utils import get_json_from_file, pdf_to_jpg, process_text, remove_background, save_cv_image
 
 from file_types.file_type import FileType
-
-#TODO Implémenter le bilan
 
 
 class Bilan(FileType):
@@ -71,14 +72,42 @@ class Bilan(FileType):
         if first_page is None:
             print("Error : Can't load {}".format(self.processed_file_path[0]))
             return False
+        
+        for f, p_file in enumerate(self.processed_file_path):
+            img = cv2.imread(p_file, 0)
+
+            if img is None:
+                print("Error : Can't load {}".format(p_file))
+                return False
+            
+            resizing = cv2.resize(img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+            cleaned = cv2.threshold(resizing, 170, 255, cv2.THRESH_BINARY)[1]
+    
+            if debug_folder is not None:
+                cv2.imwrite(os.path.join(debug_folder, f'cleaned_{f}.jpg'), cleaned)
+            
+            text_data = pytesseract.image_to_data(cleaned, output_type=Output.DICT, lang='fra')
+            text, conf, bb = process_text(text_data)
+            
+            check = False
+            for i, row in enumerate(text):
+                if 'dgfip' in ' '.join(row).lower():
+                    check = True
+            if check:
+                self.statement_tables += process_tables(
+                    p_file,
+                    arrange_mode=1,
+                    debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
+                    space_row=30
+                )            
             
         #* Process bank id
         # Bank id should be on first page
-        print('Finding bank...\r', end='')
-        bank_id = get_bank_id(first_page)
-        if bank_id is None:
-            print('Error : unknown bank document.')
-            return False
+        # print('Finding bank...\r', end='')
+        # bank_id = get_bank_id(first_page)
+        # if bank_id is None:
+        #     print('Error : unknown bank document.')
+        #     return False
         
         # infos_df = pd.DataFrame.from_dict(self.information, orient='index')
         # infos_df.to_excel(self.excel_writer,
@@ -88,20 +117,20 @@ class Bilan(FileType):
         # print('Processing fields... [DONE]')
         
         #* Process tables
-        print('Processing tables...\r', end='')
-        page_tables = []
-        for i, path in enumerate(self.processed_file_path):
-            if i == 0:
-                continue
-            self.statement_tables += process_tables(
-                path,
-                arrange_mode=1,
-                debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
-            )
+        # print('Processing tables...\r', end='')
+        # page_tables = []
+        # for i, path in enumerate(self.processed_file_path):
+        #     if i == 0:
+        #         continue
+        #     self.statement_tables += process_tables(
+        #         path,
+        #         arrange_mode=1,
+        #         debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
+        #     )
             # if i == 3:
             #     break
 
-        self.statement_tables.sort(key = lambda df: len(df.index), reverse=True)
+        # self.statement_tables.sort(key = lambda df: len(df.index), reverse=True)
         # tables_status = self.check_solde()
         # Save tables to excel files
         for i, df in enumerate(self.statement_tables):

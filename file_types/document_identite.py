@@ -97,17 +97,14 @@ class DocumentIdentite(FileType):
                 print("Error : Can't load {}".format(p_file))
                 return False
             
-            cleaned1 = remove_background(img)
             cleaned2 = self.custom_remove_background(img, kernel=(2, 4))
             
             if debug_folder is not None:
-                cv2.imwrite(os.path.join(debug_folder, f'cleaned1_{f}.jpg'), cleaned1)
                 cv2.imwrite(os.path.join(debug_folder, f'cleaned2_{f}.jpg'), cleaned2)
                             
             text_data = pytesseract.image_to_data(cleaned2, output_type=Output.DICT, lang='fra')
             text, conf, bb = process_text(text_data)
-            # for row in text:
-            #     print(row, len(''.join(row)))
+
             self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
             if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
                 fields = self.fill_with_mrz(fields)
