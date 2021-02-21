@@ -19,6 +19,8 @@ class AvisImposition(FileType):
     def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
         super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
+        self.cwd = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
+        
         self.information = {
             "Client full name": "N/A",
             "Client address": "N/A",
@@ -68,8 +70,8 @@ class AvisImposition(FileType):
             return False
 
         # Get avis d'imposition information
-        self.ai_utils = get_json_from_file('file_configs/avis_imposition.json')
-        self.dicts = get_json_from_file('dict.json')
+        self.ai_utils = get_json_from_file(os.path.join(self.cwd, 'file_configs/avis_imposition.json'))
+        self.dicts = get_json_from_file(os.path.join(self.cwd, 'dict.json'))
         
         #* Process fields
         print('Processing fields...\r', end='')

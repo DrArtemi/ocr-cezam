@@ -92,13 +92,13 @@ def get_json_from_file(filename):
         return json.load(json_file)
 
 
-def remove_background(img, kernel=(5, 5)):
+def remove_background(img, kernel=(5, 5), iterations=1):
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
     border = cv2.copyMakeBorder(img, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=[255, 255])
     resizing = cv2.resize(border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 
-    dilation = cv2.dilate(resizing, kernel,iterations=1)
-    erosion = cv2.erode(dilation, kernel,iterations=1)
+    dilation = cv2.dilate(resizing, kernel, iterations=iterations)
+    erosion = cv2.erode(dilation, kernel, iterations=iterations)
     #* Image cleaning
     # Close small dots
     clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))

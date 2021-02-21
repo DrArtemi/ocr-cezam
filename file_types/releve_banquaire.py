@@ -18,6 +18,8 @@ class ReleveBanquaire(FileType):
     def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
         super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
+        self.cwd = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
+        
         # Bank infos
         self.information = {
             "Bank name": "N/A",
@@ -84,8 +86,8 @@ class ReleveBanquaire(FileType):
             print('Error : unknown bank document.')
             return False
         # With bank id we can get bank information
-        self.bank_utils = get_json_from_file('file_configs/bank_configs/{}.json'.format(bank_id))
-        self.dicts = get_json_from_file('dict.json')
+        self.bank_utils = get_json_from_file(os.path.join(self.cwd, 'file_configs/bank_configs/{}.json').format(bank_id))
+        self.dicts = get_json_from_file(os.path.join(self.cwd, 'dict.json'))
         self.information["Bank name"] = self.bank_utils['name']
         print('Finding bank... DONE')
         

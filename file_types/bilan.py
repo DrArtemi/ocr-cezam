@@ -18,6 +18,8 @@ class Bilan(FileType):
     def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
         super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
+        self.cwd = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
+        
         # Bank infos
         self.information = {
             "Siret": "N/A",
