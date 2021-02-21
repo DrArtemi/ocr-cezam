@@ -1,3 +1,4 @@
+import os
 import datetime
 import re
 import cv2
@@ -10,7 +11,11 @@ from utils.utils import EMAIL_RGX, get_json_from_file, process_text, remove_back
 def get_bank_id(img):
     cleaned = remove_background(img)
     text = pytesseract.image_to_string(cleaned, lang='fra')
-    data = get_json_from_file('file_configs/bank_configs/banks.json')
+    data = get_json_from_file(os.path.join(
+        os.path.dirname(os.path.realpath(__file__)),
+        '..',
+        'file_configs/bank_configs/banks.json'
+        ))
     for bank_id, bank_pat_list in data.items():
         for bank_pattern in bank_pat_list:
             if bank_pattern in text.lower():
