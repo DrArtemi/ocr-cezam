@@ -91,6 +91,44 @@ def store_boxes_to_tables(tables, boxes):
     return table_boxes
 
 
+def cut_box_from_heights(box, heights, row_thresh):
+    new_boxes = []
+    remaining_box = box.copy()
+    idx_h = [j for j in range(len(heights)) if heights[j] - row_thresh < box[1] < heights[j] + row_thresh][0]
+    for j in range(len(heights)):
+        if j <= idx_h:
+            continue
+        if idx_h < len(heights) - 1:
+            if remaining_box[1] + remaining_box[3] > heights[j] + row_thresh:
+                tmp = remaining_box.copy()
+                tmp[3] = heights[j] - tmp[1]
+                new_boxes.append(tmp)
+                remaining_box[1] = heights[j]
+                remaining_box[3] = remaining_box[3] - tmp[3]
+    new_boxes.append(remaining_box)
+    return new_boxes
+
+
+def cut_cells_from_tables(tables):
+    new_tables = []
+    row_thresh = 15
+    for i, table in enumerate(tables):
+        new_tables.append([])
+        heights = []
+        for box in table:
+            if len(heights) == 0:
+                heights.append(box[1])
+            else:
+                exist = [h - row_thresh < box[1] < h + row_thresh for h in heights]
+                if not any(exist):
+                    heights.append(box[1])
+        for box in table:
+            new_tables[i] += cut_box_from_heights(box, heights, row_thresh)
+        new_tables[i].sort(key=lambda x: x[1])
+            
+    return new_tables
+
+
 def tables_to_row_col_tables(tables):
     tables_r_c = []
     previous = None
@@ -104,6 +142,7 @@ def tables_to_row_col_tables(tables):
                 previous = b
             else:
                 if previous[1] - row_thresh <= b[1] <= previous[1] + row_thresh:
+                    # Les cellules commencent à la même hauteur
                     row.append(b)
                     previous = b
                     if j == len(table) - 1:
@@ -207,14 +246,13 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
                             if c in tagged_columns and is_num:
                                 x1, y1, w1, h1 = bb[j][0]
                                 x2, y2, w2, h2 = bb[j][-1]
-                                cutted_img = cleaned[y1:y1+h1, x1:x2+w2]
-                                cutted_img = 255 - cutted_img
-                                cutted_border = cv2.copyMakeBorder(cutted_img, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[0,0])
-                                cutted_resizing = cv2.resize(cutted_border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-                                # cv2.imwrite('table_recognition/test_{}_{}_{}_bf.jpg'.format(r, c, j), cutted_resizing)
-                                txt = pytesseract.image_to_string(cutted_resizing, config='--psm 7 -c tessedit_char_whitelist=0123456789', lang='eng')
+                                cutted_img = cleaned[y1:y1+h1, x1:x2+w2]                                
+                                cutted_resizing = cv2.resize(cutted_img, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                                bordered = cv2.copyMakeBorder(cutted_resizing, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[255,255])
+                                if debug_cells is not None:
+                                    cv2.imwrite(os.path.join(debug_cells, 'test_{}_{}_{}_bf.jpg'.format(r, c, j)), bordered)
+                                txt = pytesseract.image_to_string(bordered, config='--psm 7 -c tessedit_char_whitelist=0123456789', lang='eng')
                                 txt = txt.replace(' ', '').replace('\n', '').replace('\x0c', '')
-                                # txt = re.sub('\n\x0c',  '', txt)
                                 if len(txt) > 2:
                                     txt = txt[:-2] + ',' + txt[-2:]
                                 text[j] = txt
@@ -318,17 +356,19 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     if semiopen_table:
         # Detect contours for following box detection
         contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)    
+        contours, boundingBoxes = sort_contours(contours, method="top-to-bottom")
         
         min_x, min_y = img.shape[1], img.shape[0]
         max_x = max_y = 0
         
         for contour in contours:
             (x,y,w,h) = cv2.boundingRect(contour)
+            
             if x > 0 and y > 0 and x+w < img.shape[1] and y+h < img.shape[0]:
-                min_x, max_x = min(x, min_x), max(x+w, max_x)
-                min_y, max_y = min(y, min_y), max(y+h, max_y)
+                min_x, min_y, max_x, max_y = x, y, x+w, y+h
+                break
         if max_x - min_x > 0 and max_y - min_y > 0:
-            cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 2)
+            cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 5)
     
     # If debug folder is not None, draw horizontal and vertical lines merges in 1 image
     if debug_folder is not None:
@@ -354,7 +394,8 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         x, y, w, h = cv2.boundingRect(c)
         #! Not genric at ALL, would be better to find another method !
         # A cell can't be more than 80% of the image
-        if w < img.shape[1] * 0.8:
+        # and it's width and height must be above a threshold (15)
+        if w < img.shape[1] * 0.8 and w > 15 and h > 15:
             boxes.append([x, y, w, h])
         # If it is, we process it as a table
         elif w < img.shape[1] or h < img.shape[0]:
@@ -379,8 +420,11 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     if debug_folder is not None:
         draw_table_detection_bb(img, tables_boxes, tables, debug_folder)
     
+    # For each table, cut cells so they have a similar size
+    cutted_tables_boxes = cut_cells_from_tables(tables_boxes)
+    
     # For each table, create a list of rows in a list of columns
-    tables_r_c = tables_to_row_col_tables(tables_boxes)
+    tables_r_c = tables_to_row_col_tables(cutted_tables_boxes)
     
     # calculating maximum number of cells, and get center of each column
     tables_max_col, tables_centers = get_tables_columns_info(tables_r_c)
@@ -393,6 +437,10 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
                                                         bitnot,
                                                         arrange_mode,
                                                         debug_folder)
+    
+    # for table_content in tables_content:
+    #     for row in table_content:
+    #         print(row)
     
     # If mode is 1, we prepare our tables to create dataframes
     if arrange_mode == 1:

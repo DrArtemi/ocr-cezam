@@ -5,7 +5,7 @@ class FileType(ABC):
     """This class discribe a file class architecture
     """
 
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
         self.file_path = file_path
         self.language = language
         self.excel_writer = excel_writer
@@ -14,7 +14,7 @@ class FileType(ABC):
         # Create folder where we will store our information and debug
         self.folder_path = '.'.join(self.file_path.split('.')[:-1])
         # Create sheet name where we will write this document information
-        self.sheet_name = 'Account statement {}'.format(idx)
+        self.sheet_name = doc_type + ' {}'.format(idx)
         # Excel writing row
         self.row = 0
         # Paths of our porcessed files

@@ -1,19 +1,22 @@
-
-
 import os
+
 import cv2
 import pandas as pd
 from utils.deskew_image import deskew_img
+from utils.process_fields import (get_agency_information, get_bank_id,
+                                  get_client_information, get_date)
 from utils.process_table import process_tables
 from utils.utils import get_json_from_file, pdf_to_jpg, save_cv_image
-from utils.process_fields import get_agency_information, get_bank_id, get_client_information, get_date
+
 from file_types.file_type import FileType
+
+#TODO Améliorer les résultats
 
 
 class ReleveBanquaire(FileType):
     
-    def __init__(self, file_path, language, excel_writer, idx=0, debug=False):
-        super().__init__(file_path, language, excel_writer, idx=idx, debug=debug)
+    def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
+        super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         # Bank infos
         self.information = {
@@ -38,6 +41,9 @@ class ReleveBanquaire(FileType):
             print('Error: {} is not a valid PDF or JPG file'.format(self.file_path))
             return False
 
+        if paths is None:
+            return False
+
         for path in paths:
 
             # Convert tiff to cv2 img
@@ -60,7 +66,7 @@ class ReleveBanquaire(FileType):
 
     def parse_fields(self):
         
-        debug_folder = os.path.join(self.folder_path, 'debug')
+        debug_folder = os.path.join(self.folder_path, 'rb_debug')
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
         
@@ -78,7 +84,7 @@ class ReleveBanquaire(FileType):
             print('Error : unknown bank document.')
             return False
         # With bank id we can get bank information
-        self.bank_utils = get_json_from_file('bank_configs/{}.json'.format(bank_id))
+        self.bank_utils = get_json_from_file('file_configs/bank_configs/{}.json'.format(bank_id))
         self.dicts = get_json_from_file('dict.json')
         self.information["Bank name"] = self.bank_utils['name']
         print('Finding bank... DONE')
@@ -89,7 +95,7 @@ class ReleveBanquaire(FileType):
         self.information["Client full name"],\
         self.information["Client address"] = get_client_information(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             self.dicts,
             os.path.join(debug_folder, 'client_info.jpg') if self.debug else None
         )
@@ -98,16 +104,17 @@ class ReleveBanquaire(FileType):
         self.information["Agency phone"],\
         self.information["Agency address"] = get_agency_information(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             self.dicts,
             os.path.join(debug_folder, 'agency_info.jpg') if self.debug else None
         )
         self.information["Date"] = get_date(
             first_page,
-            self.bank_utils,
+            self.bank_utils["releve_banquaire"],
             os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
         )
-        self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
+        if self.information["Date"] != 'N/A':
+            self.information["Date"] = self.information["Date"].strftime("%d %B %Y")
         
         infos_df = pd.DataFrame.from_dict(self.information, orient='index')
         infos_df.to_excel(self.excel_writer,
@@ -151,6 +158,10 @@ class ReleveBanquaire(FileType):
     @staticmethod
     def valid_value(val, dates):
         if val == '':
+            return False
+        try:
+            a = float(val.replace(',', '.'))
+        except:
             return False
         return len([d for d in dates if d != '' and 'solde' not in d.lower()]) > 0
     
@@ -207,7 +218,7 @@ class ReleveBanquaire(FileType):
             deb_val = sum(deb_values)
             #* Calc solde final value with table values
             res = round(float(first_val[0]) + (deb_val - cred_val if check_col_n == 'debit' else cred_val - deb_val), 2)
-            
+                        
             #* Set status depending on calculated solde value matching real final solde value
             if res == float(last_val[0]):
                 status[i] = { 'Success': 'Table values match final solde value.' }

@@ -2,6 +2,9 @@
     "banque_populaire": ["banque populaire", "banquepopulaire"],
     "credit_agricole": ["credit agricole", "crédit agricole"],
     "cic": ["crédit industriel et commercial", "cic"],
+    "lcl": ["crédit lyonnais", "lcl"],
     "credit_du_nord": ["crédit du nord", "cdn"],
-    "credit_mutuel": ["crédit mutuel", "credit mutuel"]
+    "credit_mutuel": ["crédit mutuel", "credit mutuel"],
+    "bnp_paribas": ["bnp paribas"],
+    "caisse_d_epargne": ["caisse d'épargne", "caisse d'epargne"]
 }
