@@ -98,7 +98,8 @@ class Bilan(FileType):
                     p_file,
                     arrange_mode=1,
                     debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
-                    space_row=30
+                    clean_cells=False,
+                    num_columns=[]
                 )            
             
         #* Process bank id
