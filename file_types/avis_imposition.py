@@ -100,7 +100,7 @@ class AvisImposition(FileType):
         page_tables = []
         for i, path in enumerate(self.processed_file_path):
             # First page of avis d'imposition can't contain usefull table
-            if i != 1:
+            if i == 0:
                 continue
             statement_tables, tables, tables_bb = process_tables(
                 path,
