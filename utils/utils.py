@@ -92,8 +92,8 @@ def get_json_from_file(filename):
         return json.load(json_file)
 
 
-def remove_background(img, kernel=(5, 5), iterations=1):
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+def remove_background(img, kernel=(2, 1), iterations=1):
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel)
     border = cv2.copyMakeBorder(img, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=[255, 255])
     resizing = cv2.resize(border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
 

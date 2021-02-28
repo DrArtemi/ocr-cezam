@@ -109,9 +109,9 @@ def cut_box_from_heights(box, heights, row_thresh):
     return new_boxes
 
 
-def cut_cells_from_tables(tables):
+def cut_cells_from_tables(tables, space_row):
     new_tables = []
-    row_thresh = 15
+    row_thresh = space_row
     for i, table in enumerate(tables):
         new_tables.append([])
         heights = []
@@ -129,10 +129,10 @@ def cut_cells_from_tables(tables):
     return new_tables
 
 
-def tables_to_row_col_tables(tables):
+def tables_to_row_col_tables(tables, space_row):
     tables_r_c = []
     previous = None
-    row_thresh = 15
+    row_thresh = space_row
     for table in tables:
         row = []
         tables_r_c.append([])
@@ -186,14 +186,14 @@ def arrange_tables(tables, tables_max_col, tables_centers):
     return tables_arranged
 
 
-def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
+def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder, clean_cells, num_columns):
     debug_cells = None if debug_folder is None else os.path.join(debug_folder, 'cells')
     if debug_cells is not None:
         if not os.path.exists(debug_cells):
             os.makedirs(debug_cells)
     tables_content = []
     tables_bb = []
-    tags = ['débit', 'crédit', 'debit', 'credit']
+    tags = num_columns
     for i, table in enumerate(tables):
         tables_content.append([])
         tables_bb.append([])
@@ -207,19 +207,22 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
                 if len(col) > 0:
                     y, x, w, h = col
                     finalimg = bitnot[x:x+h, y:y+w]
-                    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
-                    border = cv2.copyMakeBorder(finalimg, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=[255,255])
-                    resizing = cv2.resize(border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                    border = cv2.copyMakeBorder(finalimg, 10, 10, 10, 10, cv2.BORDER_CONSTANT, value=[255,255])
 
-                    dilation = cv2.dilate(resizing, kernel,iterations=1)
-                    erosion = cv2.erode(dilation, kernel,iterations=1)
-                    #* Image cleaning
-                    if debug_cells is not None:
-                        cv2.imwrite(os.path.join(debug_cells, 'test_{}_{}_bf.jpg'.format(r, c)), erosion)
-                    # Close small dots
-                    clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))
-                    # Resharpen our text by making binary img
-                    cleaned = cv2.threshold(clean_dots, 170, 255, cv2.THRESH_BINARY)[1]
+                    if clean_cells:
+                        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 1))
+                        resizing = cv2.resize(border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+                        dilation = cv2.dilate(resizing, kernel,iterations=1)
+                        erosion = cv2.erode(dilation, kernel,iterations=1)
+                        #* Image cleaning
+                        # if debug_cells is not None:
+                        #     cv2.imwrite(os.path.join(debug_cells, 'test_{}_{}_bf.jpg'.format(r, c)), erosion)
+                        # Close small dots
+                        clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))
+                        # Resharpen our text by making binary img
+                        cleaned = cv2.threshold(clean_dots, 170, 255, cv2.THRESH_BINARY)[1]
+                    else:
+                        cleaned = cv2.threshold(border, 170, 255, cv2.THRESH_BINARY)[1]
                     if debug_cells is not None:
                         cv2.imwrite(os.path.join(debug_cells, 'test_{}_{}_af.jpg'.format(r, c)), cleaned)
                     if arrange_mode == 0:
@@ -228,6 +231,7 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
                         if len(text) == 0:
                             text = pytesseract.image_to_string(cleaned, config='--psm 3', lang='fra')
                         text = re.sub('\x0c',  '', text)
+                        used_bb = col
                     else:
                         text_data = pytesseract.image_to_data(cleaned, output_type=Output.DICT, config='--psm 4', lang='fra')
                         text, conf, bb = process_text(text_data)
@@ -263,10 +267,10 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder):
     return tables_content, tables_bb
 
 
-def prepare_tables_for_df(tables, tables_bb):
+def prepare_tables_for_df(tables, tables_bb, space_row):
     prepared_tables = []
     for t in range(len(tables)):
-        threshold = 15
+        threshold = space_row
         nb_cols = len(tables[t][0])
         final_tab = []
         for i, row in enumerate(tables[t]):
@@ -286,12 +290,13 @@ def prepare_tables_for_df(tables, tables_bb):
                     for b in range(len(res)):
                         if res[b] - threshold <= tables_bb[t][i][j][k] <= res[b] + threshold:
                             final_tab[-1][b][j] = txt
+                            break
 
         prepared_tables.append([row for row_cell in final_tab for row in row_cell])
     return prepared_tables
 
 
-def draw_table_detection_bb(img, tables_boxes, tables, debug_folder):
+def draw_table_detection_bb(img, tables_boxes, tables, debug_folder, name="table_detection"):
     image = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     for i, table in enumerate(tables_boxes):
         tx, ty, tw, th = tables[i]
@@ -299,10 +304,12 @@ def draw_table_detection_bb(img, tables_boxes, tables, debug_folder):
         for box in table:
             x, y, w, h = box
             image = cv2.rectangle(image, (x,y), (x+w,y+h), (0, 255, 0), 2)
-    cv2.imwrite(os.path.join(debug_folder, "table_detection.jpg"), image)
+    cv2.imwrite(os.path.join(debug_folder, f"{name}.jpg"), image)
     
 
-def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=False):
+def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=False, space_row=15,
+                   clean_cells=True,
+                   num_columns=['débit', 'crédit', 'debit', 'credit']):
     if debug_folder is not None:
         if not os.path.exists(debug_folder):
             os.makedirs(debug_folder)
@@ -395,7 +402,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         #! Not genric at ALL, would be better to find another method !
         # A cell can't be more than 80% of the image
         # and it's width and height must be above a threshold (15)
-        if w < img.shape[1] * 0.8 and w > 15 and h > 15:
+        if w < img.shape[1] * 0.8 and w > space_row and h > space_row:
             boxes.append([x, y, w, h])
         # If it is, we process it as a table
         elif w < img.shape[1] or h < img.shape[0]:
@@ -421,10 +428,14 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         draw_table_detection_bb(img, tables_boxes, tables, debug_folder)
     
     # For each table, cut cells so they have a similar size
-    cutted_tables_boxes = cut_cells_from_tables(tables_boxes)
+    cutted_tables_boxes = cut_cells_from_tables(tables_boxes, space_row)
+    
+    # If debug folder is not None, draw table detection
+    if debug_folder is not None:
+        draw_table_detection_bb(img, cutted_tables_boxes, tables, debug_folder, name="cutted_table_detection")
     
     # For each table, create a list of rows in a list of columns
-    tables_r_c = tables_to_row_col_tables(cutted_tables_boxes)
+    tables_r_c = tables_to_row_col_tables(cutted_tables_boxes, space_row)
     
     # calculating maximum number of cells, and get center of each column
     tables_max_col, tables_centers = get_tables_columns_info(tables_r_c)
@@ -436,15 +447,13 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     tables_content, tables_bb = detect_and_arrange_text(tables_arranged,
                                                         bitnot,
                                                         arrange_mode,
-                                                        debug_folder)
-    
-    # for table_content in tables_content:
-    #     for row in table_content:
-    #         print(row)
+                                                        debug_folder,
+                                                        clean_cells,
+                                                        num_columns)
     
     # If mode is 1, we prepare our tables to create dataframes
     if arrange_mode == 1:
-        tables_content = prepare_tables_for_df(tables_content, tables_bb)
+        tables_content = prepare_tables_for_df(tables_content, tables_bb, space_row)
     
     # Creating a dataframe of the generated OCR list
     tables_dataframe = []
@@ -458,6 +467,6 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         else:
             tables_dataframe.append(pd.DataFrame(np.array(table_content)))
     
-    return tables_dataframe
+    return tables_dataframe, tables_content, tables_bb
     
     

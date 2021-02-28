@@ -62,8 +62,8 @@ if __name__ == '__main__':
     pass_doc = [
         'releveBanquaire',
         'avisImposition',
-        'liasseFiscale',
-        # 'documentIdentite',
+        # 'liasseFiscale',
+        'documentIdentite',
         'tableauAmortissement'
     ]
     
