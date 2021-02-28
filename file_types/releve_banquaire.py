@@ -129,11 +129,12 @@ class ReleveBanquaire(FileType):
         print('Processing tables...\r', end='')
         page_tables = []
         for i, path in enumerate(self.processed_file_path):
-            page_tables += process_tables(
+            statement_tables, tables, tables_bb = process_tables(
                 path,
                 arrange_mode=1,
                 debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
             )
+            page_tables += statement_tables
             
         dfs_len = set([len(df.columns) for df in page_tables])
         self.statement_tables = [None] * len(dfs_len)

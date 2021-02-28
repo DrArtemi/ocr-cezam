@@ -102,12 +102,13 @@ class AvisImposition(FileType):
             # First page of avis d'imposition can't contain usefull table
             if i != 1:
                 continue
-            page_tables += process_tables(
+            statement_tables, tables, tables_bb = process_tables(
                 path,
                 arrange_mode=1,
                 debug_folder=os.path.join(debug_folder, 'page_{}'.format(i)) if self.debug else None,
                 semiopen_table=True
             )
+            page_tables += statement_tables
 
         dfs_len = set([len(df.columns) for df in page_tables])
         self.statement_tables = [None] * len(dfs_len)
