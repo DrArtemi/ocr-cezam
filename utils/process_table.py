@@ -231,6 +231,7 @@ def detect_and_arrange_text(tables, bitnot, arrange_mode, debug_folder, clean_ce
                         if len(text) == 0:
                             text = pytesseract.image_to_string(cleaned, config='--psm 3', lang='fra')
                         text = re.sub('\x0c',  '', text)
+                        used_bb = col
                     else:
                         text_data = pytesseract.image_to_data(cleaned, output_type=Output.DICT, config='--psm 4', lang='fra')
                         text, conf, bb = process_text(text_data)
@@ -289,6 +290,7 @@ def prepare_tables_for_df(tables, tables_bb, space_row):
                     for b in range(len(res)):
                         if res[b] - threshold <= tables_bb[t][i][j][k] <= res[b] + threshold:
                             final_tab[-1][b][j] = txt
+                            break
 
         prepared_tables.append([row for row_cell in final_tab for row in row_cell])
     return prepared_tables
@@ -449,10 +451,6 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
                                                         clean_cells,
                                                         num_columns)
     
-    # for table_content in tables_content:
-    #     for row in table_content:
-    #         print(row)
-    
     # If mode is 1, we prepare our tables to create dataframes
     if arrange_mode == 1:
         tables_content = prepare_tables_for_df(tables_content, tables_bb, space_row)
@@ -469,6 +467,6 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
         else:
             tables_dataframe.append(pd.DataFrame(np.array(table_content)))
     
-    return tables_dataframe
+    return tables_dataframe, tables_content, tables_bb
     
     
