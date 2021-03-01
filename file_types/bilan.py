@@ -158,7 +158,7 @@ class Bilan(FileType):
                 for nb_values in self.numbers:
                     if n[2] in self.numbers[nb_values]:
                         pos = n[1]+1
-                        nv.append([n[2]] + [w.replace('\n', '') for w in tables[i][n[0]][pos:pos+int(nb_values)]])
+                        nv.append([n[2]] + [''.join(filter(str.isdigit, w)) for w in tables[i][n[0]][pos:pos+int(nb_values)]])
             numbers_values += nv
                         
         return numbers_values

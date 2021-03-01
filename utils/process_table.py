@@ -31,8 +31,12 @@ def sort_contours(cnts, method="left-to-right"):
     # construct the list of bounding boxes and sort them from top to
     # bottom
     boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
-    key=lambda b:b[1][i], reverse=reverse))
+    if method == "biggest":
+        (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
+        key=lambda b:b[1][2]+b[1][3], reverse=True))
+    else:
+        (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
+        key=lambda b:b[1][i], reverse=reverse))
     # return the list of sorted contours and bounding boxes
     return (cnts, boundingBoxes)
 
@@ -363,7 +367,7 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
     if semiopen_table:
         # Detect contours for following box detection
         contours, hierarchy = cv2.findContours(img_vh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)    
-        contours, boundingBoxes = sort_contours(contours, method="top-to-bottom")
+        contours, boundingBoxes = sort_contours(contours, method="biggest")
         
         min_x, min_y = img.shape[1], img.shape[0]
         max_x = max_y = 0
@@ -375,6 +379,8 @@ def process_tables(file_path, debug_folder=None, arrange_mode=0, semiopen_table=
                 min_x, min_y, max_x, max_y = x, y, x+w, y+h
                 break
         if max_x - min_x > 0 and max_y - min_y > 0:
+            min_x = min(50, min_x)
+            max_x = max(img.shape[1] - 10, max_x)
             cv2.rectangle(img_vh, (min_x, min_y), (max_x, max_y), (0, 255, 0), 5)
     
     # If debug folder is not None, draw horizontal and vertical lines merges in 1 image
