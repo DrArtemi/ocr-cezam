@@ -96,15 +96,15 @@ class DocumentIdentite(FileType):
         
         # Each field = [ Trigger words, Already processed field, Row field pos,  Value is all the line ]
         fields = {
-            "Numéro d'identité": [ ['carte', 'nationale'], False, 0, False ],
+            "Numéro d'identité": [ ['nationale', 'nationalité', 'indentite'], False, 0, False ],
             "Nom": [ ['nom'], False, 0, True ],
             "Prénom": [ ['prénom'], False, 0, True ],
-            "Sexe": [ ['sexe'], False, 0, False ],
+            "Sexe": [ ['sexe', 'né', 'né(e)'], False, 0, False ],
             "Adresse": [ ['adresse'], False, 0, True ],
-            "Date de naissance": [ ['né'], False, 1, True ],
+            "Date de naissance": [ ['sexe', 'né', 'né(e)'], False, 1, True ],
             "Lieu de naissance": [ ['à'], False, 0, True ],
-            "Date remise": [ ['délivrée', 'le'], False, 0, True ],
-            "Date validité": [ ['carte', 'valable'], False, 0, True ],
+            "Date remise": [ ['délivrée'], False, 0, True ],
+            "Date validité": [ ['valable'], False, 0, True ],
             "Lieu remise": [ ['par'], False, 0, True ],
         }
         
@@ -133,6 +133,11 @@ class DocumentIdentite(FileType):
                                                                            fields[key][0],
                                                                            idx=fields[key][2],
                                                                            all_line=fields[key][3])
+            if not fields["Numéro d'identité"][1]:
+                # Other method to find identity number
+                self.information["Numéro d'identité"],\
+                fields["Numéro d'identité"][1] = self.check_identity_number(text,
+                                                                            fields["Numéro d'identité"][0])
             
         
         infos_df = pd.DataFrame.from_dict(self.information, orient='index')
@@ -141,6 +146,13 @@ class DocumentIdentite(FileType):
                           startcol=0, startrow=self.row)
         self.row += len(self.information) + 2
         return True
+    
+    def check_identity_number(self, text, fields):
+        for row in text:
+            for i, w in enumerate(row):
+                # Identity number = 12 characters
+                if len(w) == 12 and sum([any([f in w.lower() for w in row]) for f in fields]) > 0:
+                    return row[i], True
     
     def fill_with_mrz(self, fields):
         mrz_information = {
@@ -176,8 +188,7 @@ class DocumentIdentite(FileType):
 
     def get_field(self, text, fields, idx=0, all_line=False):
         for row in text:
-            print(row)
-            res = sum([any([f in w.lower() for w in row]) for f in fields]) == len(fields)
+            res = sum([any([f in w.lower() for w in row]) for f in fields]) > 0
             if res:
                 return self.get_idx_term(row, idx, all_line)
         return 'N/A', False
