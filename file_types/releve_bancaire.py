@@ -34,7 +34,7 @@ class ReleveBancaire(FileType):
         }
     
     def processing(self):
-        extension = self.file_path.split('.')[-1]
+        extension = self.file_path.split('.')[-1].lower()
         if extension == 'pdf':
             paths = pdf_to_jpg(self.file_path, self.folder_path)
         elif extension in ['jpg', 'jpeg']:
