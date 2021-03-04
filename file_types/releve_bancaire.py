@@ -13,7 +13,7 @@ from file_types.file_type import FileType
 #TODO Améliorer les résultats
 
 
-class ReleveBanquaire(FileType):
+class ReleveBancaire(FileType):
     
     def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):
         super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
@@ -97,7 +97,7 @@ class ReleveBanquaire(FileType):
         self.information["Client full name"],\
         self.information["Client address"] = get_client_information(
             first_page,
-            self.bank_utils["releve_banquaire"],
+            self.bank_utils["releve_bancaire"],
             self.dicts,
             os.path.join(debug_folder, 'client_info.jpg') if self.debug else None
         )
@@ -106,13 +106,13 @@ class ReleveBanquaire(FileType):
         self.information["Agency phone"],\
         self.information["Agency address"] = get_agency_information(
             first_page,
-            self.bank_utils["releve_banquaire"],
+            self.bank_utils["releve_bancaire"],
             self.dicts,
             os.path.join(debug_folder, 'agency_info.jpg') if self.debug else None
         )
         self.information["Date"] = get_date(
             first_page,
-            self.bank_utils["releve_banquaire"],
+            self.bank_utils["releve_bancaire"],
             os.path.join(debug_folder, 'date_info.jpg') if self.debug else None
         )
         if self.information["Date"] != 'N/A':

@@ -2,7 +2,7 @@ from file_types.tableau_amortissement import TableauAmortissement
 from file_types.document_identite import DocumentIdentite
 from file_types.bilan import Bilan
 from file_types.avis_imposition import AvisImposition
-from file_types.releve_banquaire import ReleveBanquaire
+from file_types.releve_bancaire import ReleveBancaire
 import locale
 import argparse
 from utils.utils import get_json_from_file
@@ -32,7 +32,7 @@ def set_locale(language):
 
 def get_image(path, doc_type, language, excel_writer, idx, debug):
     switcher = {
-        "releveBanquaire": ReleveBanquaire,
+        "releveBancaire": ReleveBancaire,
         "avisImposition": AvisImposition,
         "liasseFiscale": Bilan,
         "documentIdentite": DocumentIdentite,
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     
     #! Remove this when tests are finished
     pass_doc = [
-        # 'releveBanquaire',
+        # 'releveBancaire',
         # 'avisImposition',
         # 'liasseFiscale',
         # 'documentIdentite',
