@@ -1,4 +1,5 @@
 import os
+from utils.process_table import sort_contours
 
 import cv2
 from numpy.core.fromnumeric import resize
@@ -39,7 +40,6 @@ class DocumentIdentite(FileType):
     def processing(self):
         extension = self.file_path.split('.')[-1].lower()
         del_original = True
-        print(extension)
         if extension == 'pdf':
             paths = pdf_to_jpg(self.file_path, self.folder_path)
         elif extension in ['jpg', 'jpeg']:
@@ -62,9 +62,26 @@ class DocumentIdentite(FileType):
 
             # Rotate img
             img = deskew_img(img)
+            img_nb = remove_background(img, kernel=(5,5), iterations=2)
+            img_nb = cv2.resize(img_nb, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_CUBIC)
+                                    
+            img_bin = 255 * (img_nb < 128).astype(np.uint8)
+            
+            coords = cv2.findNonZero(img_bin)
+            x, y, w, h = cv2.boundingRect(coords)
+            
+            img2 = img[y:y+h, x:x+w]
+            
+            width = 1600
+            (h, w) = img2.shape[:2]
+            r = width / float(w)
+            dim = (width, int(h * r))
+            
+            img2 = cv2.resize(img2, dim, interpolation=cv2.INTER_AREA)
+            img2 = cv2.copyMakeBorder(img2, 30, 30, 30, 30, cv2.BORDER_CONSTANT, value=[255,255])
 
             # Save image to jpg and remove tiff
-            self.processed_file_path.append(save_cv_image(img, path, 'jpg', del_original=del_original))
+            self.processed_file_path.append(save_cv_image(img2, path, 'jpg', del_original=del_original))
             
         if len(paths) == 0:
             print('Error: no pages found in {}'.format(self.file_path))
@@ -106,9 +123,10 @@ class DocumentIdentite(FileType):
             text_data = pytesseract.image_to_data(cleaned2, output_type=Output.DICT, lang='fra')
             text, conf, bb = process_text(text_data)
 
-            self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
-            if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
-                fields = self.fill_with_mrz(fields)
+            if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
+                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
+                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                    fields = self.fill_with_mrz(fields)
             for key in fields:
                 if not fields[key][1]:
                     self.information[key], fields[key][1] = self.get_field(text,
@@ -158,9 +176,9 @@ class DocumentIdentite(FileType):
 
     def get_field(self, text, fields, idx=0, all_line=False):
         for row in text:
+            print(row)
             res = sum([any([f in w.lower() for w in row]) for f in fields]) == len(fields)
             if res:
-                # print(fields, row)
                 return self.get_idx_term(row, idx, all_line)
         return 'N/A', False
     
@@ -181,15 +199,5 @@ class DocumentIdentite(FileType):
     
     @staticmethod
     def custom_remove_background(img, kernel=(2, 1), iterations=1):
-        cv_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel)
-        border = cv2.copyMakeBorder(img, 2, 2, 2, 2, cv2.BORDER_CONSTANT, value=[255, 255])
-        resizing = cv2.resize(border, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-
-        dilation = cv2.dilate(resizing, cv_kernel, iterations=iterations)
-        erosion = cv2.erode(dilation, cv_kernel, iterations=iterations)
-        #* Image cleaning
-        # Close small dots
-        clean_dots = cv2.morphologyEx(src=erosion, op=cv2.MORPH_CLOSE, kernel=np.ones((3, 3), np.uint8))
-        # Resharpen our text by making binary img
-        cleaned = cv2.threshold(clean_dots, 170, 255, cv2.THRESH_BINARY)[1]
+        cleaned = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
         return cleaned
