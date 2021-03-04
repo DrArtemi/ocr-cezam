@@ -39,7 +39,6 @@ class DocumentIdentite(FileType):
     def processing(self):
         extension = self.file_path.split('.')[-1].lower()
         del_original = True
-        print(extension)
         if extension == 'pdf':
             paths = pdf_to_jpg(self.file_path, self.folder_path)
         elif extension in ['jpg', 'jpeg']:
