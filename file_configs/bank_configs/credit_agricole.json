@@ -1,6 +1,6 @@
 {
     "name": "Crédit Agricole",
-    "releve_banquaire": {
+    "releve_bancaire": {
         "bank_info": [ [0.0, 0.2], [0.0, 0.3] ],
         "client_info": [ [0.5, 1.0], [0.0, 0.3] ],
         "date_info": [ [0.5, 1.0], [0.0, 0.2] ],
