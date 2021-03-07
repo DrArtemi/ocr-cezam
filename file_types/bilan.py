@@ -132,8 +132,6 @@ class Bilan(FileType):
         for i, df in enumerate(self.statement_tables):
             df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
             self.row += len(df.index) + 2
-        print(self.number_values)
-        print(np.array(self.number_values))
         df = pd.DataFrame.from_records(self.number_values)
         df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
         self.row += len(df.index) + 2

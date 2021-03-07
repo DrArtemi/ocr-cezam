@@ -1,4 +1,8 @@
 import cv2
+import numpy as np
+import math
+from typing import Tuple, Union
+from deskew import determine_skew
 
 
 def calc_angle(img):
@@ -13,6 +17,11 @@ def calc_angle(img):
     image = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     x, y, w, h = cv2.boundingRect(largest_contour)
     image = cv2.rectangle(image, (x,y), (x+w,y+h), (255, 0, 0), 2)
+    
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        image = cv2.rectangle(image, (x,y), (x+w,y+h), (255, 0, 0), 2)
+    cv2.imwrite('toto2.jpg', image)
     
     rect = cv2.minAreaRect(largest_contour)
 
@@ -35,6 +44,26 @@ def rotate_img(img, angle):
     return img
 
 
-def deskew_img(img):
+def deskew_img_old(img):
     angle = calc_angle(img)
     return rotate_img(img, angle)
+
+def rotate(
+        image: np.ndarray, angle: float, background: Union[int, Tuple[int, int, int]]
+) -> np.ndarray:
+    old_width, old_height = image.shape[:2]
+    angle_radian = math.radians(angle)
+    width = abs(np.sin(angle_radian) * old_height) + abs(np.cos(angle_radian) * old_width)
+    height = abs(np.sin(angle_radian) * old_width) + abs(np.cos(angle_radian) * old_height)
+
+    image_center = tuple(np.array(image.shape[1::-1]) / 2)
+    rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+    rot_mat[1, 2] += (width - old_width) / 2
+    rot_mat[0, 2] += (height - old_height) / 2
+    return cv2.warpAffine(image, rot_mat, (int(round(height)), int(round(width))), borderValue=background)
+
+def deskew_img(img):
+    angle = determine_skew(img)
+    if angle is None:
+        return img
+    return rotate(img, angle, (255, 255, 255))

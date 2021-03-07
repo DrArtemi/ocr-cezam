@@ -6,6 +6,7 @@ import time
 import numpy as np
 
 from pdf2image import convert_from_path
+from difflib import SequenceMatcher
 
 
 EMAIL_RGX = '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
@@ -117,3 +118,6 @@ def timing(f):
         return ret
     return wrap
 
+
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()

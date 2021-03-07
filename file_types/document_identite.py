@@ -1,4 +1,7 @@
 import os
+
+from numpy.core.arrayprint import _array_str_implementation
+from numpy.core.numeric import full
 from utils.process_table import sort_contours
 
 import cv2
@@ -8,7 +11,7 @@ import pandas as pd
 import pytesseract
 from pytesseract.pytesseract import Output
 from utils.deskew_image import deskew_img
-from utils.utils import pdf_to_jpg, process_text, remove_background, save_cv_image
+from utils.utils import pdf_to_jpg, process_text, remove_background, save_cv_image, similar
 
 from file_types.file_type import FileType
 import numpy as np
@@ -20,6 +23,17 @@ class DocumentIdentite(FileType):
         super().__init__(file_path, doc_type, language, excel_writer, idx=idx, debug=debug)
         
         self.cwd = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
+        
+        self.doc_types = {
+            'passeport': {
+                'func': self.parse_passeport,
+                'pattern': ['passeport'],
+            },
+            'carte_identite': {
+                'func': self.parse_carte_identite,
+                'pattern': ['carte']
+            }
+        }
         
         # Bank infos
         self.information = {
@@ -60,8 +74,8 @@ class DocumentIdentite(FileType):
                 print('Error while trying to load {}'.format(path))
                 continue
 
-            # Rotate img
             img = deskew_img(img)
+            # Rotate img
             img_nb = remove_background(img, kernel=(5,5), iterations=2)
             img_nb = cv2.resize(img_nb, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_CUBIC)
                                     
@@ -74,6 +88,9 @@ class DocumentIdentite(FileType):
             
             width = 1600
             (h, w) = img2.shape[:2]
+            if w == 0:
+                print('Error while trying to process {}'.format(path))
+                continue
             r = width / float(w)
             dim = (width, int(h * r))
             
@@ -108,6 +125,7 @@ class DocumentIdentite(FileType):
             "Lieu remise": [ ['par'], False, 0, True ],
         }
         
+        document_type = ''
         for f, p_file in enumerate(self.processed_file_path):
             img = cv2.imread(p_file, 0)
 
@@ -119,26 +137,27 @@ class DocumentIdentite(FileType):
             
             if debug_folder is not None:
                 cv2.imwrite(os.path.join(debug_folder, f'cleaned2_{f}.jpg'), cleaned2)
-                            
+                  
             text_data = pytesseract.image_to_data(cleaned2, output_type=Output.DICT, lang='fra')
             text, conf, bb = process_text(text_data)
-
-            if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
-                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
-                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
-                    fields = self.fill_with_mrz(fields)
-            for key in fields:
-                if not fields[key][1]:
-                    self.information[key], fields[key][1] = self.get_field(text,
-                                                                           fields[key][0],
-                                                                           idx=fields[key][2],
-                                                                           all_line=fields[key][3])
-            if not fields["Numéro d'identité"][1]:
-                # Other method to find identity number
-                self.information["Numéro d'identité"],\
-                fields["Numéro d'identité"][1] = self.check_identity_number(text,
-                                                                            fields["Numéro d'identité"][0])
             
+            if document_type == '':
+                for doc_type in self.doc_types:
+                    cnt = 0
+                    valid = [False] * len(self.doc_types[doc_type]['pattern'])
+                    for row in text:
+                        for w in row:
+                            for i, pattern in enumerate(self.doc_types[doc_type]['pattern']):
+                                if not valid[i] and pattern in w.lower():
+                                    valid[i] = True
+                    if all(valid):
+                        document_type = doc_type
+                        break
+                if document_type == '':
+                    print("Error : Can't determine identity document type")
+                    return False
+
+            fields = self.doc_types[document_type]['func'](fields, text, img)
         
         infos_df = pd.DataFrame.from_dict(self.information, orient='index')
         infos_df.to_excel(self.excel_writer,
@@ -147,14 +166,39 @@ class DocumentIdentite(FileType):
         self.row += len(self.information) + 2
         return True
     
+    def parse_passeport(self, fields, text, img):
+        if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
+                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text, char=44)
+                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                    fields = self.fill_with_mrz_passeport(fields)
+        
+    def parse_carte_identite(self, fields, text, img):
+        if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
+                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
+                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                    fields = self.fill_with_mrz_identity(fields)
+        for key in fields:
+            if not fields[key][1]:
+                self.information[key], fields[key][1] = self.get_field(text,
+                                                                        fields[key][0],
+                                                                        idx=fields[key][2],
+                                                                        all_line=fields[key][3])
+        if not fields["Numéro d'identité"][1]:
+            # Other method to find identity number
+            self.information["Numéro d'identité"],\
+            fields["Numéro d'identité"][1] = self.check_identity_number(text,
+                                                                        fields["Numéro d'identité"][0])
+        return fields
+    
     def check_identity_number(self, text, fields):
         for row in text:
             for i, w in enumerate(row):
                 # Identity number = 12 characters
                 if len(w) == 12 and sum([any([f in w.lower() for w in row]) for f in fields]) > 0:
                     return row[i], True
+        return 'N/A', False
     
-    def fill_with_mrz(self, fields):
+    def fill_with_mrz_identity(self, fields):
         mrz_information = {
             "Nom": self.information['MRZ ligne 1'][5:30].replace('<', ''),
             "Prénom": ' '.join(self.information['MRZ ligne 2'][13:27].replace('<', ' ').split()),
@@ -169,6 +213,27 @@ class DocumentIdentite(FileType):
                 self.information[info] = mrz_information[info]
                 fields[info][1] = True
         return fields
+    
+    def fill_with_mrz_passeport(self, fields):
+        
+        full_name = self.information['MRZ ligne 1'][5:]
+        last_name = full_name.split('<<')[0].replace('<', ' ')
+        first_names = ' '.join(' '.join(full_name.split('<<')[1:]).replace('<', ' ').split())
+        
+        mrz_information = {
+            "Nom": last_name,
+            "Prénom": first_names,
+            "Numéro d'identité": self.information['MRZ ligne 2'][:9],
+            "Sexe": self.information['MRZ ligne 2'][20],
+            "Date de naissance": self.mrz_date_to_date(self.information['MRZ ligne 2'][13:19]),
+            "Date validité": self.mrz_date_to_date(self.information['MRZ ligne 2'][21:27]),
+        }
+        
+        for info in mrz_information:
+            if self.information[info] == 'N/A':
+                self.information[info] = mrz_information[info]
+                fields[info][1] = True
+        return fields
 
     @staticmethod
     def mrz_date_to_date(date):
@@ -176,11 +241,11 @@ class DocumentIdentite(FileType):
         new_date = splited[2] + '.' + splited[1] + '.' + splited[0]
         return new_date
 
-    def get_mrz(self, text):
+    def get_mrz(self, text, char=36):
         mrz = []
         for row in text:
             stacked_row = ''.join(row)
-            if len(stacked_row) == 36 and '<' in stacked_row:
+            if len(stacked_row) == char and '<' in stacked_row:
                 mrz.append(stacked_row)
         if len(mrz) > 1:
             return mrz[0], mrz[1]
