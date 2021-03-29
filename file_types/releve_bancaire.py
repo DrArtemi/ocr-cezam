@@ -10,8 +10,6 @@ from utils.utils import get_json_from_file, pdf_to_jpg, save_cv_image
 
 from file_types.file_type import FileType
 
-#TODO Améliorer les résultats
-
 
 class ReleveBancaire(FileType):
     

@@ -1,4 +1,5 @@
 import os
+from PIL.Image import merge
 
 import cv2
 from numpy.core.fromnumeric import resize
@@ -30,6 +31,7 @@ class Bilan(FileType):
             "Client address": "N/A",
             "Date": "N/A"
         }
+        self.page_types = ['2033', '2050', '2035']
         self.numbers = {
             '1': ['010', '014', '028', '040', '044', '050', '060', '064', '068', '072', '080', '084', '088', '092', '096',
                   '110', '193', '197', '199', '195', '182', '184', '209', '215', '217', '229', '243', '259', '316', '318',
@@ -51,7 +53,15 @@ class Bilan(FileType):
             '3': ['012', '016', '030', '042', '048', '052', '062', '066', '070', '074', '082', '086', '090', '094', '098',
                   '112'],
         }
+        self.letters = {
+            '1': ['AA', 'AB', 'AD', 'AF', 'AH', 'AJ', 'AL', 'AN', 'AP', 'AR', 'AT', 'AV', 'AX', 'CS', 'CU', 'BB', 'BD',
+                  'BF', 'BH', 'BJ', 'BL', 'BN', 'BP', 'BR', 'BT', 'BV', 'BX', 'BZ', 'CB', 'CD', 'CF', 'CH', 'CJ', 'CL',
+                  'CM', 'CN', 'CO'],
+            '2': ['AC', 'AE', 'AG', 'AI', 'AK', 'AM', 'AO', 'AQ', 'AS', 'AU', 'AW', 'AY', 'CT', 'CV', 'BC', 'BE', 'BG',
+                  'BI', 'BK', 'BM', 'BO', 'BQ', 'BS', 'BU', 'BW', 'BY', 'CA', 'CC', 'CE', 'CG', 'CI', 'CK', '1A'],
+        }
         self.number_values = []
+        self.letter_values = []
         self.statement_tables = []
         
     def processing(self):
@@ -113,9 +123,18 @@ class Bilan(FileType):
             text, conf, bb = process_text(text_data)
             
             check = False
+            page_type = ''
             for i, row in enumerate(text):
-                if 'dgfip' in ' '.join(row).lower():
-                    check = True
+                merged_row = ' '.join(row).lower()
+                if 'dgfip' in merged_row:
+                    for pt in self.page_types:
+                        if pt in merged_row:
+                            page_type = pt
+                            check = True
+                            break
+                    if check:
+                        break
+                    
             if check:
                 statement_tables, tables, tables_bb = process_tables(
                     p_file,
@@ -126,13 +145,19 @@ class Bilan(FileType):
                 )
                 self.statement_tables += statement_tables
                 
-                self.number_values += self.get_numbers_values(tables, tables_bb)
+                if page_type == '2033':
+                    self.number_values += self.get_numbers_values(tables, tables_bb)
+                elif page_type == '2050':
+                    self.letter_values += self.get_letters_values(tables, tables_bb)
                 
         # Save tables to excel files
         for i, df in enumerate(self.statement_tables):
             df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
             self.row += len(df.index) + 2
         df = pd.DataFrame.from_records(self.number_values)
+        df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
+        self.row += len(df.index) + 2
+        df = pd.DataFrame.from_records(self.letter_values)
         df.to_excel(self.excel_writer, sheet_name=self.sheet_name, startcol=0, startrow=self.row)
         self.row += len(df.index) + 2
         print('Processing tables... [DONE]')
@@ -160,4 +185,26 @@ class Bilan(FileType):
             numbers_values += nv
                         
         return numbers_values
+    
+    def get_letters_values(self, tables, tables_bb):
+        tables_letters = []
+        for i, table_content in enumerate(tables):
+            tables_letters.append([])
+            for j, row in enumerate(table_content):
+                for k, word in enumerate(row):
+                    if len(tables_bb[i][j][k]) > 0 and\
+                        35 < tables_bb[i][j][k][2] < 45:
+                            tables_letters[-1].append([j, k, word.replace('\n', '')])
+                    # print(repr(word))
+        letters_values = []
+        for i, tn in enumerate(tables_letters):
+            nv = []
+            for n in tn:
+                for nb_values in self.letters:
+                    if n[2] in self.letters[nb_values]:
+                        pos = n[1]+1
+                        nv.append([n[2]] + [''.join(filter(str.isdigit, w)) for w in tables[i][n[0]][pos:pos+int(nb_values)]])
+            letters_values += nv
+                        
+        return letters_values
   

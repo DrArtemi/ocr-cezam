@@ -1,3 +1,4 @@
+from file_types.bulletin_paie import BulletinPaie
 from file_types.tableau_amortissement import TableauAmortissement
 from file_types.document_identite import DocumentIdentite
 from file_types.bilan import Bilan
@@ -36,7 +37,8 @@ def get_image(path, doc_type, language, excel_writer, idx, debug):
         "avisImposition": AvisImposition,
         "liasseFiscale": Bilan,
         "documentIdentite": DocumentIdentite,
-        "tableauAmortissement": TableauAmortissement
+        "tableauAmortissement": TableauAmortissement,
+        "bulletinPaie": BulletinPaie
     }
     image_class = switcher.get(doc_type)
     return image_class(path, doc_type, language, excel_writer, idx=idx, debug=debug)
@@ -57,20 +59,8 @@ if __name__ == '__main__':
         
     config = get_json_from_file(args.config)
     excel_writer = pd.ExcelWriter(args.excel_path, engine='xlsxwriter')
-    
-    #! Remove this when tests are finished
-    pass_doc = [
-        # 'releveBancaire',
-        # 'avisImposition',
-        # 'liasseFiscale',
-        # 'documentIdentite',
-        # 'tableauAmortissement'
-    ]
-    
+        
     for document_type in config:
-        #! Remove this when tests are finished
-        if document_type in pass_doc:
-            continue
         for i, document in enumerate(config[document_type]):
             print('Processing {} {}...'.format(document_type, i))
             # Get image class
@@ -84,7 +74,5 @@ if __name__ == '__main__':
             # Save Excel Writer
                 print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
                 continue
-    #! Remove this when tests are finished
-    if len(pass_doc) < 5:
-        excel_writer.save()
+    excel_writer.save()
     print('Processing ended, leaving !')

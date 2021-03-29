@@ -20,11 +20,16 @@
         "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/M Blas_passeport.pdf",
         "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/Mme Pelle_Passeport.jpg",
         "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/Passeport_M Le Bihan.pdf",
-        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/Passeport_M Manzetti.pdf"
+        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/Passeport_M Manzetti.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/document_identite/titre_sejour_1.jpg"
     ],
     "tableauAmortissement": [
         "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/ASO_TA_1.pdf",
         "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/Prêt Caisse d'Epargne réactualisé - SCI Villa Thaïs - 200 000,00 €.pdf",
         "/media/adrien/Shared/Work/Cezam/documents/examples/tableau_amortissement/Tableaux amortissement prêt perso.pdf"
+    ],
+    "bulletinPaie": [
+        "/media/adrien/Shared/Work/Cezam/documents/examples/Bulletins de paie/BDP1.pdf",
+        "/media/adrien/Shared/Work/Cezam/documents/examples/Bulletins de paie/BDP2.pdf"
     ]
 }

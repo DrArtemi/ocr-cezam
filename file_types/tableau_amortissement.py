@@ -8,9 +8,6 @@ from file_types.file_type import FileType
 from utils.deskew_image import deskew_img
 
 
-#TODO Améliorer les résultats
-
-
 class TableauAmortissement(FileType):
     
     def __init__(self, file_path, doc_type, language, excel_writer, idx=0, debug=False):

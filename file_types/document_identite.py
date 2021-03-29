@@ -31,7 +31,11 @@ class DocumentIdentite(FileType):
             },
             'carte_identite': {
                 'func': self.parse_carte_identite,
-                'pattern': ['carte']
+                'pattern': ['carte', 'nationale']
+            },
+            'titre_sejour': {
+                'func': self.parse_titre_sejour,
+                'pattern': ['carte', 'sejour']
             }
         }
         
@@ -146,6 +150,7 @@ class DocumentIdentite(FileType):
                     cnt = 0
                     valid = [False] * len(self.doc_types[doc_type]['pattern'])
                     for row in text:
+                        print(row)
                         for w in row:
                             for i, pattern in enumerate(self.doc_types[doc_type]['pattern']):
                                 if not valid[i] and pattern in w.lower():
@@ -166,17 +171,23 @@ class DocumentIdentite(FileType):
         self.row += len(self.information) + 2
         return True
     
+    def parse_titre_sejour(self, fields, text, img):
+        if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
+            self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text, char=44)
+            if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                fields = self.fill_with_mrz_passeport(fields)
+    
     def parse_passeport(self, fields, text, img):
         if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
-                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text, char=44)
-                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
-                    fields = self.fill_with_mrz_passeport(fields)
+            self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text, char=44)
+            if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                fields = self.fill_with_mrz_passeport(fields)
         
     def parse_carte_identite(self, fields, text, img):
         if self.information['MRZ ligne 1'] == 'N/A' and self.information['MRZ ligne 2'] == 'N/A':
-                self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
-                if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
-                    fields = self.fill_with_mrz_identity(fields)
+            self.information['MRZ ligne 1'], self.information['MRZ ligne 2'] = self.get_mrz(text)
+            if self.information['MRZ ligne 1'] != 'N/A' and self.information['MRZ ligne 2'] != 'N/A':
+                fields = self.fill_with_mrz_identity(fields)
         for key in fields:
             if not fields[key][1]:
                 self.information[key], fields[key][1] = self.get_field(text,
