@@ -150,7 +150,6 @@ class DocumentIdentite(FileType):
                     cnt = 0
                     valid = [False] * len(self.doc_types[doc_type]['pattern'])
                     for row in text:
-                        print(row)
                         for w in row:
                             for i, pattern in enumerate(self.doc_types[doc_type]['pattern']):
                                 if not valid[i] and pattern in w.lower():

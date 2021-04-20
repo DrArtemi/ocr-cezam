@@ -62,17 +62,24 @@ if __name__ == '__main__':
         
     for document_type in config:
         for i, document in enumerate(config[document_type]):
-            print('Processing {} {}...'.format(document_type, i))
+            print('Processing {} {}... ({})'.format(document_type, i, document))
             # Get image class
-            image = get_image(document, document_type, args.lang, excel_writer, i, True)
-            # Process image (create folder, separate pdf pages to different images, process images)
-            if not image.processing():
-                print('Error while trying to process {}, moving on to the next document'.format(document))
+            try:
+                image = get_image(document, document_type, args.lang, excel_writer, i, True)
+                # Process image (create folder, separate pdf pages to different images, process images)
+                if not image.processing():
+                    print('Error while trying to process {}, moving on to the next document'.format(document))
+                    continue
+            except:
+                print(f'Error, could not process image for {document}')
                 continue
             # image.extract_text(save_file=True)
-            if not image.parse_fields():
-            # Save Excel Writer
-                print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
-                continue
+            try:
+                if not image.parse_fields():
+                # Save Excel Writer
+                    print('Error while trying to parse fields of {}, moving on to the next document'.format(document))
+                    continue
+            except:
+                print(f'Error, could not parse fields for {document}')
     excel_writer.save()
     print('Processing ended, leaving !')

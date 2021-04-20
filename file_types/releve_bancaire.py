@@ -145,7 +145,10 @@ class ReleveBancaire(FileType):
                         else pd.concat([self.statement_tables[i], df], ignore_index=True)
 
         self.statement_tables.sort(key = lambda df: len(df.index), reverse=True)
-        tables_status = self.check_solde()
+        try:
+            tables_status = self.check_solde()
+        except:
+            tables_status = [{ 'Error' : "Unable to check solde." }] * len(self.statement_tables)
         # Save tables to excel files
         for i, df in enumerate(self.statement_tables):
             status_df = pd.DataFrame.from_dict(tables_status[i], orient='index', columns=['Description'])

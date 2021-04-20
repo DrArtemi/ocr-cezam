@@ -2,6 +2,7 @@
 config_test.json
 test_path.txt
 .vscode/
+*.xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
