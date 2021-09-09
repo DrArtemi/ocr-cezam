@@ -1,6 +1,6 @@
 # ocr-cezam
 
-Extract information from PDF to Excel file
+OCR Project made for a shitty company
 
 ## Dependencies
 
